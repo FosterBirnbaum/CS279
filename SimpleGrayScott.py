@@ -1,28 +1,22 @@
-# This implements a simple version of a Gray-Scott diffusion model
+#TODO: add documentation
 
 from numpy import zeros
 from tqdm import tqdm
-from random import random
-from math import floor, ceil
-import matplotlib
 from matplotlib import pyplot as plt
-from matplotlib.animation import FuncAnimation
 import numpy as np
-from numpy import array
 from scipy import ndimage
-from matplotlib import colors
 from PIL import Image
-import sys
 import os
+import logging
 np.set_printoptions(precision=2)
 
-
+# Constant Parameters
+OUTPUT_FOLDER = "simulations"
 DEFAULT_LAPLACE_MATRIX = np.array([[0.05, 0.2, 0.05],
                                    [0.2, -1, 0.2],
                                    [0.05, 0.2, 0.05]], np.float64)
 
 
-# Holds information about each particle
 class Particle(object):
     def __init__(self, nX=25, nY=25, diffusion=1.0):
         self.nX = nX
@@ -84,15 +78,35 @@ class Simulation(object):
             for y in range(45, 55):
                 self.B.blocks[(x, y)] = 1
 
-    def run(self, iterations, using="matplotlib"):
+    def run(self, iterations, using="matplotlib", run_name="simple"):
 
+        # Create and go to output directory
+        output_dir_name = "{}_iterations-{}_length-{}_feed-{}_kill-{}".format(run_name,
+                                                                              iterations,
+                                                                              self.length,
+                                                                              self.feed,
+                                                                              self.kill)
+
+        try:
+            output_path = os.path.join(OUTPUT_FOLDER, output_dir_name)
+            os.mkdir(output_path)
+            os.chdir(output_path)
+        except FileExistsError as e:
+            logging.error("Simulation already exists with same name and parameters. "
+                            + "Please change run_name or delete the existing directory.")
+            return
+
+        # Run the proper simulation
         if using == "matplotlib":
-            self.run_matplotlib(iterations)
+            self.run_matplotlib(iterations, run_name)
 
         else:
-            self.run_img(iterations)
+            self.run_img(iterations, run_name)
 
-    def run_matplotlib(self, iterations):
+        # Change back to the original directory
+        os.chdir(cur_dir)
+
+    def run_matplotlib(self, iterations, run_name):
 
         for frame in tqdm(range(iterations)):
 
@@ -106,11 +120,11 @@ class Simulation(object):
 
             plt.figure()
             plt.imshow(binaryArray)
-            plt.savefig(str(self.name) + '-' + str(frame) + '.png')
+            plt.savefig(str(run_name) + '-' + str(frame) + '.png')
             plt.close()
             self.update()
 
-    def run_img(self, iterations):
+    def run_img(self, iterations, run_name):
 
         for frame in tqdm(range(iterations)):
 
@@ -126,7 +140,7 @@ class Simulation(object):
             rgbArray[..., 0] = frameA
             rgbArray[..., 2] = frameB
             img = Image.fromarray(rgbArray)
-            img.save(str(self.name) + '-' + str(frame) + '.jpeg')
+            img.save(str(run_name) + '-' + str(frame) + '.jpeg')
 
             self.update()
 
@@ -151,20 +165,22 @@ class Simulation(object):
         self.lapA = ndimage.convolve(np.asarray(self.A.getGrid()), self.laplace_matrix)
         self.lapB = ndimage.convolve(np.asarray(self.B.getGrid()), self.laplace_matrix)
 
+    # TODO: make these dynamic to the particle
     def get_dAdt_at(self, i, j):
         conc_A = self.A.blocks[(i, j)]
         conc_B = self.B.blocks[(i, j)]
         lapA = self.lapA[(i, j)]
-        return self.A.diffusion * lapA - (conc_A*conc_B)**2 + self.feed * (1 - conc_A)
+        return self.A.diffusion * lapA - conc_A*conc_B**2 + self.feed * (1 - conc_A)
 
+    # TODO: make these dynamic to the particle
     def get_dBdt_at(self, i, j):
         conc_A = self.A.blocks[(i, j)]
         conc_B = self.B.blocks[(i, j)]
         lapB = self.lapB[(i, j)]
-        return self.B.diffusion * lapB + (conc_A*conc_B)**2 - (self.kill + self.feed) * conc_B
+        return self.B.diffusion * lapB + conc_A*conc_B**2 - (self.kill + self.feed) * conc_B
 
 
 if __name__ == "__main__":
 
-    sim = Simulation(feed=0.0545, kill=0.03, length=100, name="simple")
-    sim.run(iterations=100, using="matplotlib")
+    sim = Simulation(feed=0.0545, kill=0.03, length=100)
+    sim.run(iterations=100, using="matplotlib", run_name="simple")
