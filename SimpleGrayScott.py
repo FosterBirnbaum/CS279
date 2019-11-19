@@ -52,10 +52,20 @@ class Particle(object):
 
 
 class Simulation(object):
-    def __init__(self, feed=0.0545, kill=0.03, length=100, maxConc=3, name="simple",
+    def __init__(self, feed=0.0545, kill=0.03, length=100, maxConc=3,
                  laplace_matrix=DEFAULT_LAPLACE_MATRIX):
+        """
+        Object to simulate Gray-Scott diffusion with two particles.
 
-        self.name = name
+        :param feed: feed rate
+        :param kill: kill rate
+        :param length: side-length of simulation square
+        :param maxConc: max concentration
+        :param laplace_matrix: 3x3 convolution matrix
+        :return None
+        """
+
+        # Class parameters
         self.length = length
         self.maxConc = maxConc
         self.feed = feed
@@ -64,12 +74,19 @@ class Simulation(object):
         self.lapA = None
         self.lapB = None
 
+        # Init particles
         self.A = Particle(nX=length, nY=length, diffusion=1)
         self.B = Particle(nX=length, nY=length, diffusion=0.5)
 
+        # Set initial particle state
         self.set_initial_state()
 
     def set_initial_state(self):
+        """
+        Sets the initial state of the particle objects for the simulation.
+        Currently places one A particle everywhere and 1 B particle in a 10x10 grid
+        TODO: make this dynamic
+        """
 
         for x in self.A.blocks:
             self.A.blocks[x] = 1
@@ -79,6 +96,13 @@ class Simulation(object):
                 self.B.blocks[(x, y)] = 1
 
     def run(self, iterations, using="matplotlib", run_name="simple"):
+        """
+        Runs the simulation and stores frames to a result directory in `simulatons/`
+        :param iterations: number of iterations to run the simulation for
+        :param using: which graphics library to use ["matplotlib" or "img"]. Default is "matplotlib"
+        :param run_name: name of the simulation run. Used as prefix for output directory
+        :return: None
+        """
 
         # Create and go to output directory
         output_dir_name = "{}_iterations-{}_length-{}_feed-{}_kill-{}".format(run_name,
@@ -107,6 +131,12 @@ class Simulation(object):
         os.chdir(cur_dir)
 
     def run_matplotlib(self, iterations, run_name):
+        """
+        Use matplotlib as graphics library for simulation run
+        :param iterations: Number of iterations for simulation
+        :param run_name: Prefix for frame files ("<run_name>-<frame_number>.png")
+        :return: None
+        """
 
         for frame in tqdm(range(iterations)):
 
@@ -125,6 +155,13 @@ class Simulation(object):
             self.update()
 
     def run_img(self, iterations, run_name):
+        """
+        Use PIL as graphics library.
+        TODO: Collin - I don't quite understand this one yet
+        :param iterations: Number of iterations for simulation
+        :param run_name: Prefix for frame files ("<run_name>-<frame_number>.png")
+        :return: None
+        """
 
         for frame in tqdm(range(iterations)):
 
@@ -145,11 +182,15 @@ class Simulation(object):
             self.update()
 
     def update(self):
+        """
+        Update step. Updates blocks of particles A and B using the Gray-Scott Diffusion Model.
+        :return: None
+        """
 
-        # Iterate through the keys of self.blocks to compute the second discrete derivatives
+        # Update the laplacians for A and B for this time step
         self.compute_laplacians()
 
-        # Loop through all points in grid and update
+        # Loop through all points in grid and update using d[Particle]/dt as defined by Gray-Scott
         shape = self.lapA.shape
         for i in range(shape[0]):
             for j in range(shape[1]):
@@ -161,12 +202,23 @@ class Simulation(object):
                 self.B.blocks[(i, j)] += dBdt
 
     def compute_laplacians(self):
+        """
+        Compute the laplacians for particles A and B using the 3x3 convolution matrix.
+        :return: None
+        """
 
         self.lapA = ndimage.convolve(np.asarray(self.A.getGrid()), self.laplace_matrix)
         self.lapB = ndimage.convolve(np.asarray(self.B.getGrid()), self.laplace_matrix)
 
     # TODO: make these dynamic to the particle
     def get_dAdt_at(self, i, j):
+        """
+        Compute the change in A at a particular location (i, j). Returned equation is
+        defined by Gray-Scott model.
+        :param i: x location to update
+        :param j: y location to update
+        :return: dAdt evaluated at (i, j)
+        """
         conc_A = self.A.blocks[(i, j)]
         conc_B = self.B.blocks[(i, j)]
         lapA = self.lapA[(i, j)]
@@ -174,6 +226,13 @@ class Simulation(object):
 
     # TODO: make these dynamic to the particle
     def get_dBdt_at(self, i, j):
+        """
+        Compute the change in B at a particular location (i, j). Returned equation is
+        defined by Gray-Scott model.
+        :param i: x location to update
+        :param j: y location to update
+        :return: dBdt evaluated at (i, j)
+        """
         conc_A = self.A.blocks[(i, j)]
         conc_B = self.B.blocks[(i, j)]
         lapB = self.lapB[(i, j)]
@@ -182,5 +241,6 @@ class Simulation(object):
 
 if __name__ == "__main__":
 
+    # Run an example simulation and save the results to simulations\simple-[<params>]
     sim = Simulation(feed=0.0545, kill=0.03, length=100)
     sim.run(iterations=100, using="matplotlib", run_name="simple")
