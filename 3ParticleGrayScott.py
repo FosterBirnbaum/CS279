@@ -14,6 +14,7 @@ from matplotlib import colors
 from PIL import Image
 import sys
 import os
+import cv2
 
 np.set_printoptions(precision=2)
 
@@ -67,6 +68,7 @@ def firstDeriv(part):
 		ddy[(i,j)] = 0.5*(nextValY - curVal) + 0.5*(curVal - prevValY)
 	return [ddx, ddy]
 
+#Calcualte laplacian based on first dreivative
 def laplacian(part, firstDerivs):
 	lap = {xy:0 for xy in part.blocks}
 	ddx = np.asarray(firstDerivs[0])
@@ -90,18 +92,19 @@ def update(A, B, C, feed, kill):
 	lapA = ndimage.convolve(np.asarray(A.getGrid()), laplaceMatrix)
 	lapB = ndimage.convolve(np.asarray(B.getGrid()), laplaceMatrix)
 	lapC = ndimage.convolve(np.asarray(C.getGrid()), laplaceMatrix)
+	probAB = np.exp(-1*(np.multiply(np.asarray(A.getGrid()),np.asarray(B.getGrid()))))
+	probC = np.exp(-1*np.asarray(C.getGrid()))
 
   	#Loop through all points in grid and update
 	shape = lapA.shape
 	for i in range(shape[0]):
 		for j in range(shape[1]):
-			newBlockA = A.blocks[(i,j)] + A.diffusion*lapA[(i,j)] - (A.blocks[(i,j)]*B.blocks[(i,j)]) + C.blocks[(i,j)]
-			newBlockB = B.blocks[(i,j)] + B.diffusion*lapB[(i,j)] - (A.blocks[(i,j)]*B.blocks[(i,j)]) + C.blocks[(i,j)]
-			newBlockC = C.diffusion*lapC[(i,j)] + (A.blocks[(i,j)]*B.blocks[(i,j)])
+			newBlockA = A.blocks[(i,j)] + A.diffusion*lapA[(i,j)] - probAB[(i,j)]*(min(A.blocks[(i,j)],B.blocks[(i,j)])) + probC[(i,j)]*C.blocks[(i,j)]
+			newBlockB = B.blocks[(i,j)] + B.diffusion*lapB[(i,j)] - probAB[(i,j)]*(min(A.blocks[(i,j)],B.blocks[(i,j)])) + probC[(i,j)]*C.blocks[(i,j)]
+			newBlockC = C.diffusion*lapC[(i,j)] + probAB[(i,j)]*(min(A.blocks[(i,j)],B.blocks[(i,j)])) - probC[(i,j)]*C.blocks[(i,j)]
 			A.blocks[(i,j)] = newBlockA
 			B.blocks[(i,j)] = newBlockB
 			C.blocks[(i,j)] = newBlockC
-
 
 def main():
 	length = 100
@@ -115,7 +118,11 @@ def main():
 		for y in range(100):
 			B.blocks[(x,y)] = 1
 	C = particle(nX = length, nY = length, diffusion = 0.1) 
-	count = 0
+	
+	#Set up video to capture frames
+	simVideo = cv2.VideoCapture(0)
+	fourcc = cv2.VideoWriter_fourcc(*'XVID')
+	output = cv2.VideoWriter('reactionSimulation.avi',fourcc,8,(100,100))
 	for frame in range(100): #Run simulation for 1000 timesteps
 		if (frame % 10 == 0): print((frame / 10))
 		frameA = np.asarray(A.getGrid())
@@ -132,12 +139,16 @@ def main():
 		rgbArray[:,:, 1] = frameB
 		rgbArray[:,:, 2] = frameC
 		img = Image.fromarray(rgbArray)
-		plt.figure()
-		plt.imshow(img)
-		plt.savefig('3parttest' + os.sep + 'frame ' + str(frame) + '.png')
-		plt.close()
+		img = np.array(img)
+		output.write(img)
+		cv2.imshow('curframe',img)
+		#plt.figure()
+		#plt.imshow(img)
+		#plt.savefig('3parttest' + os.sep + 'frame ' + str(frame) + '.png')
+		#plt.close()
 		update(A, B, C, .2, .03)
-
+	output.release()
+	cv2.destroyAllWindows()
 
 if __name__ == "__main__":
 	main()
