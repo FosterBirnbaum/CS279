@@ -122,11 +122,11 @@ class Simulation(object):
             np.where(frameA > 256, 256, frameA)
             np.where(frameB > 256, 256, frameB)
 
-            rgbArray = np.zeros((length,length,3), 'uint8')
+            rgbArray = np.zeros((self.length, self.length, 3), 'uint8')
             rgbArray[..., 0] = frameA
             rgbArray[..., 2] = frameB
             img = Image.fromarray(rgbArray)
-            img.save('frame ' + str(i) + '.jpeg')
+            img.save(str(self.name) + '-' + str(frame) + '.jpeg')
 
             self.update()
 
@@ -154,14 +154,14 @@ class Simulation(object):
     def get_dAdt_at(self, i, j):
         conc_A = self.A.blocks[(i, j)]
         conc_B = self.B.blocks[(i, j)]
-        lapA = self.lapA[i, j]
-        return self.A.diffusion * lapA - (conc_A * conc_B) ** 2 + self.feed * (1 - conc_A)
+        lapA = self.lapA[(i, j)]
+        return self.A.diffusion * lapA - (conc_A*conc_B)**2 + self.feed * (1 - conc_A)
 
     def get_dBdt_at(self, i, j):
         conc_A = self.A.blocks[(i, j)]
         conc_B = self.B.blocks[(i, j)]
-        lapB = self.lapB[i, j]
-        return self.B.diffusion * lapB + (conc_A * conc_B) ** 2 - (self.kill + self.feed) * conc_B
+        lapB = self.lapB[(i, j)]
+        return self.B.diffusion * lapB + (conc_A*conc_B)**2 - (self.kill + self.feed) * conc_B
 
 
 if __name__ == "__main__":
