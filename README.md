@@ -14,6 +14,7 @@
 
 Virtual environment setup
 ```
+pip install virtualenv  # get virtualenv if you don't have it already
 virtualenv venv  # create virtualenv named 'venv'
 source venv/bin/activate # activate this virtual environment
 ```
