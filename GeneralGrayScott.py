@@ -16,19 +16,30 @@ from numpy import zeros
 from numpy import random
 from tqdm import tqdm
 from matplotlib import pyplot as plt
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.animation as animation
+from matplotlib.animation import FFMpegWriter
 import numpy as np
 from scipy import ndimage
-from PIL import Image
+import scipy.stats as stats
 import os
+import sys
 import logging
-import cv2
+from multiprocessing import Pool
+import time
+
+
 np.set_printoptions(precision=2)
 
 # Constant Parameters
 OUTPUT_FOLDER = "simulations"
+DEFAULT_INIT = "random"
 DEFAULT_LAPLACE_MATRIX = np.array([[0.05, 0.2, 0.05],
-                                   [0.2, -1, 0.2],
+                                   [0.2, -1.0, 0.2],
                                    [0.05, 0.2, 0.05]], np.float64)
+DEFAULT_TEMP_LOWERBOUND = 273
+DEFAULT_TEMP_UPPERBOUND = 473
 
 """
 Defines the particle class that contains information on a specific particle in the simulation.
@@ -59,8 +70,8 @@ Defines the Simulation object that runs a reaction-diffusion simulation accordin
 to user input parameters. For a list of sample input parameters, please see top of file comment.
 """
 class Simulation(object):
-    def __init__(self, n=2, orders = [-1, -1], diffusions = [1, 1], feed=0.0545, kill=0.03, length=100, maxConc=3,
-                 laplace_matrix=DEFAULT_LAPLACE_MATRIX):
+    def __init__(self, n=2, orders = [-1, -1], diffusions = [1, 1], feed=0.0545, kill=0.03, activationEnergies = [1, 1], temp = 298, 
+                length=100, maxConc=3, laplace_matrix=DEFAULT_LAPLACE_MATRIX, init = DEFAULT_INIT):
         """
         Object to simulate Gray-Scott diffusion with n particles.
         :param n: number of particles
@@ -69,9 +80,12 @@ class Simulation(object):
         :param diffusions: array of diffusion constants for each molecule
         :param feed: feed rate
         :param kill: kill rate
+        :param activationEnergies: barriers to the reaction occuring
+        :param temp: temperature at which the reaction occurs
         :param length: side-length of simulation square
         :param maxConc: max concentration
         :param laplace_matrix: 3x3 convolution matrix
+        :param intit: string identifying how grid shoud be initialized
         :return None
         """
 
@@ -82,8 +96,11 @@ class Simulation(object):
         self.maxConc = maxConc
         self.feed = feed
         self.kill = kill
+        self.activationEnergies = activationEnergies
+        self.temp = temp
         self.laplace_matrix = laplace_matrix
-        self.laplacians = np.zeros((n, length, length))
+        self.laplacians = np.zeros((n, length, length), np.float64)
+        self.init = init
 
         # Init particles
         self.particleList = []
@@ -96,14 +113,25 @@ class Simulation(object):
     def set_initial_state(self):
         """
         Sets the initial state of the particle objects for the simulation.
-        Currently places 0.5 relative concentration of first 2 input molecules everywhere
-        TODO: make this dynamic
+        TODO: make this more dynamic
         """
-
-        for particle in range(self.numParticles - 1):
+        #If user wants random intialization, put first two particles to 0.5 concentration everywhere
+        if self.init == "random":
+            for particle in range(self.numParticles - 1):
+                for i in range(self.length):
+                    for j in range(self.length):
+                        self.particleList[particle].blocks[(i, j)] = 0.5
+        #If user wants point mass, put first particle to 1 everywhere and second particle to 0 everywhere except a small region in center
+        elif self.init == "pointMass":
             for i in range(self.length):
                 for j in range(self.length):
-                    self.particleList[particle].blocks[(i, j)] = 0.5
+                    self.particleList[0].blocks[(i, j)] = 1
+                    if (self.length*0.5 - i)**2 + (self.length*0.5 - j)**2 <= self.length*0.05:
+                        self.particleList[1].blocks[(i,j)] = 1
+                        self.particleList[0].blocks[(i, j)] = 0
+                    else:
+                        self.particleList[1].blocks[(i,j)] = 0
+
 
     def run(self, iterations, using="cv2", run_name="simple"):
         """
@@ -132,58 +160,32 @@ class Simulation(object):
             return
 
         # Run the proper simulation
-        if using == "matplotlib":
-            self.run_matplotlib(iterations, run_name)
-
-        else:
-            self.run_cv2(iterations, run_name)
+        self.run_matplotlib(iterations, run_name)
 
         # Change back to the original directory
         os.chdir(cur_dir)
 
+
     def run_matplotlib(self, iterations, run_name):
         """
-        Use matplotlib as graphics library for simulation run
-        :param iterations: Number of iterations for simulation
-        :param run_name: Prefix for frame files ("<run_name>-<frame_number>.png")
-        :return: None
-        """
-
-        for frame in tqdm(range(iterations)):
-
-            binaryArray = np.zeros((self.length, self.length), 'int')
-
-            for i in range(self.length):
-                for j in range(self.length):
-
-                    if self.A.getBlock((i, j)) > self.B.getBlock((i, j)):
-                        binaryArray[i, j] = 1
-
-            plt.figure()
-            plt.imshow(binaryArray)
-            plt.savefig(str(run_name) + '-' + str(frame) + '.png')
-            plt.close()
-            self.update()
-
-    def run_cv2(self, iterations, run_name):
-        """
-        Use OpenCV as graphics library to create a video of the simulation.
+        Use matplotlib as graphics library to create a video of the simulation.
         :param iterations: Number of iterations for simulation
         :param run_name: Prefix for frame files ("<run_name>-<output_type>.png")
         :return: None
         """
 
         #Start creating video
-        simVideo = cv2.VideoCapture(0)
-        fourcc = cv2.VideoWriter_fourcc(*'XVID')
-        output = cv2.VideoWriter(run_name + "-video.avi", fourcc,8,(self.length,self.length))
+        metadata = dict(title='Movie Test', artist='Matplotlib', comment='Movie support!')
+        writer = FFMpegWriter(fps=15, metadata=metadata)
+        fig = plt.figure()
+        ims = []
 
         #Create numpy arrays to track total concentrations of all particles and rate or product formation and figures to display concentrations and rate
-        particleConcentrations = np.zeros((iterations, self.numParticles, self.length, self.length))
-        rate = np.zeros(iterations)
+        particleConcentrations = np.zeros((iterations, self.numParticles, self.length, self.length), np.float64)
+        rate = np.zeros(iterations, np.float64)
         timesteps = np.arange(iterations)
-
-        for frame in tqdm(range(iterations)): #Run simulation for 1000 timesteps
+        
+        for frame in tqdm(range(iterations)):
             #Get concentration for current frame
             for i in range(self.numParticles):
                 particleConcentrations[frame,i,:,:] = np.asarray(self.particleList[i].getGrid())
@@ -193,27 +195,32 @@ class Simulation(object):
                 rate[frame] = sum(sum(particleConcentrations[frame,self.numParticles-1,:,:])) - sum(sum(particleConcentrations[frame-1,self.numParticles-1,:,:]))
 
             #Ensure no values are above max or below min (this shouldn't be an issue if update parameters are set appropriately)
-            np.where(particleConcentrations>1, particleConcentrations, 1)
-            np.where(particleConcentrations<0, particleConcentrations, 0)
+            np.where(particleConcentrations<1, particleConcentrations, 1)
+            np.where(particleConcentrations>0, particleConcentrations, 0)
 
-            #Create RGB array
-            rgbArray = np.zeros((self.length,self.length,3), 'uint8')
-            for i in range(self.numParticles):
-                rgbArray[:,:, i] = particleConcentrations[frame,i,:,:]*255.0
-            
-            #Save as video
-            img = Image.fromarray(rgbArray)
-            img = np.array(img)
-            output.write(img)
-            
+            im = plt.imshow(particleConcentrations[frame, 0, :, :], animated=True)
+            ims.append([im])
+
+            #Save individual frames (default commented out)
+            """
+            plt.figure()
+            plt.imshow(particleConcentrations[frame, 0, :, :])
+            plt.savefig(str(run_name) + '-' + str(frame) + '.png')
+            plt.close()
+            """
             self.update()
-        output.release()
-        cv2.destroyAllWindows()
+            #for step in range(25):
+            #    self.update()
+        
+        #Save video
+        ani = animation.ArtistAnimation(fig, ims, interval=10, blit=True, repeat_delay=1000)
+        ani.save(run_name + "-video.avi")
+        plt.close()
 
         #Plot concentration and rate
         colors = ['r', 'g', 'b']
         for i in range(self.numParticles):
-            plt.plot(timesteps, sum(sum(particleConcentrations[i,:,:,:])), color=colors[i],label=('particle' + str(i)))
+            plt.plot(timesteps, np.sum(np.sum(particleConcentrations[:,i,:,:],axis=-1),axis=-1)/(self.length**2), color=colors[i],label=('particle' + str(i)))
         plt.legend()
         plt.savefig(str(run_name) + '-concentrations.png')
         plt.close()
@@ -222,7 +229,6 @@ class Simulation(object):
         plt.legend()
         plt.savefig(str(run_name) + '-rate.png')
         plt.close()
-
 
     def update(self):
         """
@@ -246,8 +252,18 @@ class Simulation(object):
         :return: None
         """
         for i in range(self.numParticles):
-            self.laplacians[i,:,:] = ndimage.convolve(np.asarray(self.particleList[i].getGrid()), self.laplace_matrix)
+            self.laplacians[i,:,:] = ndimage.convolve(np.asarray(self.particleList[i].getGrid()), self.laplace_matrix, mode='wrap')
 
+
+    def compute_maxwell(self):
+        """
+        Compute the energy of the system according to the maxwell-boltzmann distribution
+        :return: energy sampled from appropriate maxwell-boltzmann distribution
+        """
+        maxwell = stats.maxwell
+        scale = 10*((self.temp - DEFAULT_TEMP_LOWERBOUND)/(DEFAULT_TEMP_UPPERBOUND - DEFAULT_TEMP_LOWERBOUND))
+        energy = maxwell.rvs(loc=0, scale=scale, size=1)
+        return energy[0]
 
     def get_dParticlesdt_at(self, i, j):
         """
@@ -268,61 +284,44 @@ class Simulation(object):
         lapA = self.laplacians[0, i, j]
         lapB = self.laplacians[1, i, j]
         lapC = self.laplacians[2, i, j] if self.numParticles > 2 else 0
-        threshold_C = 1/(1+np.exp(-1*conc_C)) if self.numParticles > 2 else 0
-        react_C = 0 
         react_AB = 0
-        if random.random() <= threshold_C:
-            react_C = 1
+        react_C = 0
         if(self.orders[0] == -1):
-            dAdt = conc_A + self.diffusions[particle] * lapA - conc_A*conc_B**2 + self.feed * (1 - conc_A)
-            dBdt = conc_B + self.B.diffusion * lapB + conc_A*conc_B**2 - (self.kill + self.feed) * conc_B
+            dAdt = self.particleList[0].diffusion*lapA - conc_A*(conc_B**2) + self.feed*(1 - conc_A)
+            dBdt = self.particleList[1].diffusion*lapB + conc_A*(conc_B**2) - (self.kill+self.feed)*conc_B
             dCdt = 0
         elif(self.orders[0] == 1):
-            threshold_AB = 1/(1+np.exp(-1*conc_A*conc_B))
-            if random.random() <= threshold_AB:
+            curEnergy = self.compute_maxwell()
+            if(curEnergy > self.activationEnergies[0]):
                 react_AB = 1
-            dAdt = self.particleList[0].diffusion*lapA/9 - react_AB*(min(conc_A, conc_B)) + react_C*conc_C
-            dBdt = self.particleList[1].diffusion*lapB/9- react_AB*(min(conc_A, conc_B)) + react_C*conc_C
-            dCdt = self.particleList[2].diffusion*lapC/9+ react_AB*(min(conc_A, conc_B)) - react_C*conc_C
+            if(curEnergy > self.activationEnergies[1]):
+                react_C = 1
+            dAdt = self.particleList[0].diffusion*lapA
+            dBdt = self.particleList[1].diffusion*lapB
+            dCdt = self.particleList[2].diffusion*lapC
+            conc_A += dAdt 
+            conc_B += dBdt 
+            conc_C += dCdt  
+            dAdt = dAdt - react_AB*conc_A*conc_B + react_C*conc_C
+            dBdt = dBdt - react_AB*conc_A*conc_B + react_C*conc_C
+            dCdt = dCdt + react_AB*conc_A*conc_B - react_C*conc_C
         elif(self.orders[0] == 2):
             threshold_AB = 1/(1+np.exp(-1*(conc_A**2)*conc_B))
             if random.random() <= threshold_AB:
                 react_AB = 1
-            dAdt = self.particleList[0].diffusion*lapA/9 - 2*react_AB*(min(conc_A, conc_B)) + 2*prob_C*conc_C
-            dBdt = self.particleList[1].diffusion*lapB/9- react_AB*(min(conc_A, conc_B)) + prob_C*conc_C
-            dCdt = self.particleList[2].diffusion*lapC/9 + react_AB*(min(conc_A, conc_B)) - prob_C*conc_C
+            dAdt = self.particleList[0].diffusion*lapA - react_AB*(conc_A*conc_B**2) + react_C*conc_C
+            dBdt = self.particleList[1].diffusion*lapB - react_AB*(conc_A*conc_B**2) + react_C*conc_C
+            dCdt = self.particleList[2].diffusion*lapC + react_AB*(conc_A*conc_B**2) - react_C*conc_C
         return [dAdt, dBdt, dCdt]
 
-    def get_dAdt_at(self, i, j):
-        """
-        Compute the change in A at a particular location (i, j). Returned equation is
-        defined by Gray-Scott model.
-        :param i: x location to update
-        :param j: y location to update
-        :return: dAdt evaluated at (i, j)
-        """
-        conc_A = self.A.blocks[(i, j)]
-        conc_B = self.B.blocks[(i, j)]
-        lapA = self.lapA[(i, j)]
-        return self.A.diffusion * lapA - conc_A*conc_B**2 + self.feed * (1 - conc_A)
-
-    # TODO: make these dynamic to the particle
-    def get_dBdt_at(self, i, j):
-        """
-        Compute the change in B at a particular location (i, j). Returned equation is
-        defined by Gray-Scott model.
-        :param i: x location to update
-        :param j: y location to update
-        :return: dBdt evaluated at (i, j)
-        """
-        conc_A = self.A.blocks[(i, j)]
-        conc_B = self.B.blocks[(i, j)]
-        lapB = self.lapB[(i, j)]
-        return self.B.diffusion * lapB + conc_A*conc_B**2 - (self.kill + self.feed) * conc_B
-
-
 if __name__ == "__main__":
-
-    # Run an example simulation and save the results to simulations\simple-[<params>]
-    sim = Simulation(n=3, orders=[1,1,1], diffusions = [1, 1, 0.5], feed=0.0545, kill=0.03, length=100)
-    sim.run(iterations=100, using="cv2", run_name="simple")
+    #Decide what type of simulation the user wants to run
+    if sys.argv[1] == "2Particles":
+        sim = Simulation(n=2, orders=[-1,-1], diffusions = [1, 0.5], feed = 0.0362, kill = 0.062, length=50, init="pointMass")
+    elif sys.argv[1] == "2ParticlesZeroOrder":
+        sim = Simulation(n=2, orders=[0, 0], diffusions = [1, 0.5], activationEnergies = [3, 3], temp = 298, length=50, init="pointMass")
+    elif sys.argv[1] == "3ParticlesFirstOrder":
+        sim = Simulation(n=3, orders=[1,1,1], diffusions = [1, 1, 0.5], feed=0.032, kill=0.0062, length=50, init="random")
+    
+    #Run the selected simulation and save to the results to simulations\[<input name>]-[<params>]
+    sim.run(iterations=750, using="matplotlib", run_name=sys.argv[2])
