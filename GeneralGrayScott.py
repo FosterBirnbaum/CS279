@@ -26,6 +26,7 @@ import scipy.stats as stats
 import os
 import sys
 import logging
+import argparse
 from multiprocessing import Pool
 import time
 
@@ -370,18 +371,40 @@ class Simulation(object):
         return [dAdt, dBdt, dCdt]
 
 if __name__ == "__main__":
-    #Decide what type of simulation the user wants to run
-    if sys.argv[1] == "2Particles":
+
+    # Get user input via command-line arguments
+    parser = argparse.ArgumentParser(description='Run a modified Gray-Scott diffusion simulation model.')
+
+    parser.add_argument('--type', type=str, nargs=1,
+                        choices=["2Particles", "2ParticlesZeroOrder",
+                                 "3ParticlesFirstOrder", "3ParticlesSecondOrder",
+                                 "CellularOpen", "CellularRestricted"],
+                        default=["2Particles"],
+                        help='Select a pre-designed simulation type to run')
+    parser.add_argument('--run_name', type=str, default=["test"],
+                        help='Enter a base prefix run name for the saved simulation directory.')
+    parser.add_argument('--iterations', type=int, default=50,
+                        help='Enter the number of iterations for which to run the simulation.')
+
+    args = parser.parse_args()
+
+    # Decide what type of simulation the user wants to run
+    if args.type[0] == "2Particles":
         sim = Simulation(n=2, orders=[-1,-1], diffusions = [1, 0.5], feed = 0.0362, kill = 0.062, length=50, init="pointMass")
-    elif sys.argv[1] == "2ParticlesZeroOrder":
+    elif args.type[0] == "2ParticlesZeroOrder":
         sim = Simulation(n=2, orders=[0, 0], diffusions = [1, 0.5], activationEnergies = [3, 3], temp = 298, length=50, init="pointMass")
-    elif sys.argv[1] == "3ParticlesFirstOrder":
+    elif args.type[0] == "3ParticlesFirstOrder":
         sim = Simulation(n=3, orders=[1,1,1], diffusions = [1, 1, 0.5], activationEnergies = [4, 4], temp = 350, length=50, init="even", startingConcs=[0.5, 0.25, 0])
-    elif sys.argv[1] == "3ParticlesSecondOrder":
+    elif args.type[0] == "3ParticlesSecondOrder":
         sim = Simulation(n=3, orders=[2,2,2], diffusions = [1, 1, 0.5], activationEnergies = [3, 3], temp = 298, length=50, init="even", startingConcs=[0.5, 0.25, 0])
-    elif sys.argv[1] == "CellularOpen":
+    elif args.type[0] == "CellularOpen":
         sim = Simulation(n=3, orders=[1,1,1], diffusions = [1, 1, 0.5], activationEnergies = [3, 3], temp = 350, length=50, init="cellular-open", startingConcs=[0.5, 1, 0])
-    elif sys.argv[1] == "CellularRestricted":
+    elif args.type[0] == "CellularRestricted":
         sim = Simulation(n=3, orders=[1,1,1], diffusions = [1, 1, 0.5], activationEnergies = [3, 3], temp = 350, length=50, init="cellular-restricted", startingConcs=[0.5, 1, 0], laplace_matrix=RESTRICTED_LAPLACE_MATRIX)
+    else:
+        # argparse should handle this, but just in case
+        sim = None
+        raise Exception("Unrecognized simulation type. %r" % args.type[0])
+
     #Run the selected simulation and save to the results to simulations\[<input name>]-[<params>]
-    sim.run(iterations=int(sys.argv[3]), using="matplotlib", run_name=sys.argv[2])
+    sim.run(iterations=args.iterations, using="matplotlib", run_name=args.run_name)
