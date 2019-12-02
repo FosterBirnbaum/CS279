@@ -38,6 +38,9 @@ DEFAULT_INIT = "random"
 DEFAULT_LAPLACE_MATRIX = np.array([[0.05, 0.2, 0.05],
                                    [0.2, -1.0, 0.2],
                                    [0.05, 0.2, 0.05]], np.float64)
+RESTRICTED_LAPLACE_MATRIX = np.array([[0.3, 0.08, 0.04],
+                                   [0.08, -1.0, 0.08],
+                                   [0.04, 0.08, 0.3]], np.float64)
 DEFAULT_TEMP_LOWERBOUND = 273
 DEFAULT_TEMP_UPPERBOUND = 473
 
@@ -71,7 +74,7 @@ to user input parameters. For a list of sample input parameters, please see top 
 """
 class Simulation(object):
     def __init__(self, n=2, orders = [-1, -1], diffusions = [1, 1], feed=0.0545, kill=0.03, activationEnergies = [1, 1], temp = 298, 
-                length=100, maxConc=3, laplace_matrix=DEFAULT_LAPLACE_MATRIX, init = DEFAULT_INIT):
+                length=100, maxConc=3, startingConcs = [0.25, 0.25, 0], laplace_matrix=DEFAULT_LAPLACE_MATRIX, init = DEFAULT_INIT):
         """
         Object to simulate Gray-Scott diffusion with n particles.
         :param n: number of particles
@@ -94,6 +97,7 @@ class Simulation(object):
         self.orders = orders
         self.length = length
         self.maxConc = maxConc
+        self.startingConcs = startingConcs
         self.feed = feed
         self.kill = kill
         self.activationEnergies = activationEnergies
@@ -115,12 +119,36 @@ class Simulation(object):
         Sets the initial state of the particle objects for the simulation.
         TODO: make this more dynamic
         """
-        #If user wants random intialization, put first two particles to 0.5 concentration everywhere
-        if self.init == "random":
+        #If user wants even intialization, put first two particles to starting concentration everywhere
+        if self.init == "even":
             for particle in range(self.numParticles - 1):
                 for i in range(self.length):
                     for j in range(self.length):
-                        self.particleList[particle].blocks[(i, j)] = 0.5
+                        self.particleList[particle].blocks[(i, j)] = self.startingConcs[particle]
+        #If user wants seperated initialization, put first particle to starting concentration on one half and second to starting concentration on other half (with small gap in between)
+        elif self.init == "seperated":
+            for i in range(self.length):
+                for j in range(self.length):
+                    if(i < self.length*0.5-self.length*0.05):
+                        self.particleList[0].blocks[(i, j)] = self.startingConcs[0]
+                    elif(i > self.length*0.5 + self.length*0.05):
+                        self.particleList[1].blocks[(i, j)] = self.startingConcs[1]
+        #If user wants cellular initialization, establish a region in the center with first particle present and from which it cannot diffuse out of, and set 
+        #second particle to a very high concentration elsewhere in the grid
+        elif "cellular" in self.init:
+            for i in range(self.length):
+                for j in range(self.length):
+                    if (self.length*0.5 - self.length*0.06 <= i <= self.length*0.5 + self.length*0.06 and 
+                       self.length*0.5 - self.length*0.06 <= j <= self.length*0.5 + self.length*0.06):
+                       self.particleList[0].blocks[(i, j)] = self.startingConcs[0]
+                    elif (i < self.length*0.1) and (j < self.length*0.1):
+                        self.particleList[1].blocks[(i, j)] = self.startingConcs[1]
+        #If user wants random intialization, randomly assign (with mean of starting concentration) concentration of first two particled everywhere
+        elif self.init == "random":
+            for particle in range(self.numParticles - 1):
+                for i in range(self.length):
+                    for j in range(self.length):
+                        self.particleList[particle].blocks[(i, j)] = random.normal(self.startingConcs[particle],0.5)
         #If user wants point mass, put first particle to 1 everywhere and second particle to 0 everywhere except a small region in center
         elif self.init == "pointMass":
             for i in range(self.length):
@@ -143,11 +171,12 @@ class Simulation(object):
         """
 
         # Create and go to output directory
-        output_dir_name = "{}_iterations-{}_length-{}_feed-{}_kill-{}".format(run_name,
+        output_dir_name = "{}_iterations-{}_length-{}_init-{}_starting-{}".format(run_name,
                                                                               iterations,
                                                                               self.length,
-                                                                              self.feed,
-                                                                              self.kill)
+                                                                              self.init,
+                                                                              self.startingConcs[0]
+                                                                              )
 
         try:
             output_path = os.path.join(OUTPUT_FOLDER, output_dir_name)
@@ -182,8 +211,9 @@ class Simulation(object):
 
         #Create numpy arrays to track total concentrations of all particles and rate or product formation and figures to display concentrations and rate
         particleConcentrations = np.zeros((iterations, self.numParticles, self.length, self.length), np.float64)
-        rate = np.zeros(iterations, np.float64)
+        rate = np.zeros(iterations-1, np.float64)
         timesteps = np.arange(iterations)
+        rateTimesteps = np.arange(1, iterations)
         
         for frame in tqdm(range(iterations)):
             #Get concentration for current frame
@@ -192,13 +222,13 @@ class Simulation(object):
 
             #If past current frame, get rate of product formation
             if(frame > 0):
-                rate[frame] = sum(sum(particleConcentrations[frame,self.numParticles-1,:,:])) - sum(sum(particleConcentrations[frame-1,self.numParticles-1,:,:]))
+                rate[frame-1] = sum(sum(particleConcentrations[frame,self.numParticles-1,:,:])) - sum(sum(particleConcentrations[frame-1,self.numParticles-1,:,:]))
 
             #Ensure no values are above max or below min (this shouldn't be an issue if update parameters are set appropriately)
             np.where(particleConcentrations<1, particleConcentrations, 1)
             np.where(particleConcentrations>0, particleConcentrations, 0)
 
-            im = plt.imshow(particleConcentrations[frame, 0, :, :], animated=True)
+            im = plt.imshow(particleConcentrations[frame, 1, :, :], animated=True)
             ims.append([im])
 
             #Save individual frames (default commented out)
@@ -225,7 +255,7 @@ class Simulation(object):
         plt.savefig(str(run_name) + '-concentrations.png')
         plt.close()
 
-        plt.plot(timesteps, rate, color=colors[0],label=('rate'))
+        plt.plot(rateTimesteps, rate, color=colors[0],label=('rate'))
         plt.legend()
         plt.savefig(str(run_name) + '-rate.png')
         plt.close()
@@ -251,8 +281,25 @@ class Simulation(object):
         Compute the laplacians for all particles using the 3x3 convolution matrix.
         :return: None
         """
-        for i in range(self.numParticles):
-            self.laplacians[i,:,:] = ndimage.convolve(np.asarray(self.particleList[i].getGrid()), self.laplace_matrix, mode='wrap')
+        for particle in range(self.numParticles):
+            #If init was set to cellular, then for the first and third particles restrict movement to the center of the grid (i.e., the nucleus)
+            #and for all other particles, do not allow movement outside the cell
+            curGrid = np.asarray(self.particleList[particle].getGrid())
+            if "cellular" in self.init:
+                if (particle == 0) or (particle == 2):
+                    grid = np.asarray(self.particleList[particle].getGrid())
+                    nucleus = grid[int(self.length*0.5 - self.length*0.06):int(self.length*0.5 + self.length*0.06), int(self.length*0.5 - self.length*0.06):int(self.length*0.5 + self.length*0.06)]
+                    self.laplacians[particle,:,:] = np.zeros((self.length, self.length), np.float64)
+                    self.laplacians[particle,int(self.length*0.5 - self.length*0.06):int(self.length*0.5 + self.length*0.06),int(self.length*0.5 - self.length*0.06):int(self.length*0.5 + self.length*0.06)] = ndimage.convolve(nucleus, self.laplace_matrix, mode='wrap')
+                else:
+                    #If user specific restricted cellular, use the restricted laplacian matrices
+                    if "restricted" in self.init:
+                        self.laplacians[particle,:,:] = ndimage.convolve(curGrid, RESTRICTED_LAPLACE_MATRIX,  mode='wrap')
+                    else:
+                        self.laplacians[particle,:,:] = ndimage.convolve(curGrid, self.laplace_matrix, mode='wrap')
+
+            else:
+                self.laplacians[particle,:,:] = ndimage.convolve(curGrid, self.laplace_matrix, mode='wrap')
 
 
     def compute_maxwell(self):
@@ -277,7 +324,7 @@ class Simulation(object):
         :param j: y location to update
         :return: dParticledt evaluated at (i, j) for input particle
         """
-        #TODO: Make this more dynamic (allow orders of second particle to matter, too)
+        #Get starting concentrations and laplacian values
         conc_A = self.particleList[0].blocks[(i, j)]
         conc_B = self.particleList[1].blocks[(i, j)]
         conc_C = self.particleList[2].blocks[(i, j)] if self.numParticles > 2 else 0
@@ -306,12 +353,20 @@ class Simulation(object):
             dBdt = dBdt - react_AB*conc_A*conc_B + react_C*conc_C
             dCdt = dCdt + react_AB*conc_A*conc_B - react_C*conc_C
         elif(self.orders[0] == 2):
-            threshold_AB = 1/(1+np.exp(-1*(conc_A**2)*conc_B))
-            if random.random() <= threshold_AB:
+            curEnergy = self.compute_maxwell()
+            if(curEnergy > self.activationEnergies[0]):
                 react_AB = 1
-            dAdt = self.particleList[0].diffusion*lapA - react_AB*(conc_A*conc_B**2) + react_C*conc_C
-            dBdt = self.particleList[1].diffusion*lapB - react_AB*(conc_A*conc_B**2) + react_C*conc_C
-            dCdt = self.particleList[2].diffusion*lapC + react_AB*(conc_A*conc_B**2) - react_C*conc_C
+            if(curEnergy > self.activationEnergies[1]):
+                react_C = 1
+            dAdt = self.particleList[0].diffusion*lapA
+            dBdt = self.particleList[1].diffusion*lapB
+            dCdt = self.particleList[2].diffusion*lapC
+            conc_A += dAdt 
+            conc_B += dBdt 
+            conc_C += dCdt  
+            dAdt = dAdt - 2*react_AB*conc_A**2*conc_B + 2*react_C*conc_C
+            dBdt = dBdt - react_AB*conc_A**2*conc_B + react_C*conc_C
+            dCdt = dCdt + react_AB*conc_A**2*conc_B - react_C*conc_C
         return [dAdt, dBdt, dCdt]
 
 if __name__ == "__main__":
@@ -321,7 +376,12 @@ if __name__ == "__main__":
     elif sys.argv[1] == "2ParticlesZeroOrder":
         sim = Simulation(n=2, orders=[0, 0], diffusions = [1, 0.5], activationEnergies = [3, 3], temp = 298, length=50, init="pointMass")
     elif sys.argv[1] == "3ParticlesFirstOrder":
-        sim = Simulation(n=3, orders=[1,1,1], diffusions = [1, 1, 0.5], feed=0.032, kill=0.0062, length=50, init="random")
-    
+        sim = Simulation(n=3, orders=[1,1,1], diffusions = [1, 1, 0.5], activationEnergies = [4, 4], temp = 350, length=50, init="even", startingConcs=[0.5, 0.25, 0])
+    elif sys.argv[1] == "3ParticlesSecondOrder":
+        sim = Simulation(n=3, orders=[2,2,2], diffusions = [1, 1, 0.5], activationEnergies = [3, 3], temp = 298, length=50, init="even", startingConcs=[0.5, 0.25, 0])
+    elif sys.argv[1] == "CellularOpen":
+        sim = Simulation(n=3, orders=[1,1,1], diffusions = [1, 1, 0.5], activationEnergies = [3, 3], temp = 350, length=50, init="cellular-open", startingConcs=[0.5, 1, 0])
+    elif sys.argv[1] == "CellularRestricted":
+        sim = Simulation(n=3, orders=[1,1,1], diffusions = [1, 1, 0.5], activationEnergies = [3, 3], temp = 350, length=50, init="cellular-restricted", startingConcs=[0.5, 1, 0], laplace_matrix=RESTRICTED_LAPLACE_MATRIX)
     #Run the selected simulation and save to the results to simulations\[<input name>]-[<params>]
-    sim.run(iterations=750, using="matplotlib", run_name=sys.argv[2])
+    sim.run(iterations=int(sys.argv[3]), using="matplotlib", run_name=sys.argv[2])
