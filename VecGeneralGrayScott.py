@@ -211,7 +211,7 @@ class Simulation(object):
 
         # Create numpy arrays to track total concentrations of all particles and rate
         # or product formation and figures to display concentrations and rate
-        self.particleConcentrations = np.zeros((iterations, self.numParticles), np.float32)
+        self.particleConcentrations = np.zeros((iterations, self.numParticles), np.float64)
         self.rate = np.zeros(iterations - 1, np.float32)
         self.timesteps = np.arange(iterations)
         self.rateTimesteps = np.arange(1, iterations)
@@ -241,26 +241,26 @@ class Simulation(object):
         # plt.close()
 
         # Plot concentration and rate
-        # print("Creating plots...")
-        # colors = ['r', 'g', 'b']
-        # for i in range(self.numParticles):
-        #     plt.plot(self.timesteps, self.particleConcentrations[:, i] / (self.length ** 2),
-        #              color=colors[i], label=('particle' + str(i)))
-        # plt.legend()
-        # plt.savefig(str(run_name) + '-concentrations.png')
-        # plt.close()
-        #
-        # plt.plot(self.rateTimesteps, self.rate, color=colors[0], label=('rate'))
-        # plt.legend()
-        # plt.savefig(str(run_name) + '-rate.png')
-        # plt.close()
-        #
-        # print("Complete.")
+        print("Creating plots...")
+        colors = ['r', 'g', 'b']
+        for i in range(self.numParticles):
+            plt.plot(self.timesteps, self.particleConcentrations[:, i] / (self.length ** 2),
+                     color=colors[i], label=('particle' + str(i)))
+        plt.legend()
+        plt.savefig(str(run_name) + '-concentrations.png')
+        plt.close()
+
+        plt.plot(self.rateTimesteps, self.rate, color=colors[0], label=('rate'))
+        plt.legend()
+        plt.savefig(str(run_name) + '-rate.png')
+        plt.close()
+
+        print("Complete.")
 
     def get_init_frame(self):
 
-        # for i in range(self.numParticles):
-        #     self.particleConcentrations[0, i] = np.sum(np.sum(self.particleList[i].blocks))
+        for i in range(self.numParticles):
+            self.particleConcentrations[0, i] = np.sum(np.sum(self.particleList[i].blocks))
         #
         # np.where(self.particleConcentrations < 1, self.particleConcentrations, 1)
         # np.where(self.particleConcentrations > 0, self.particleConcentrations, 0)
@@ -274,12 +274,12 @@ class Simulation(object):
         for step in range(self.updates_per_frame):
             self.update()
 
-        # for i in range(self.numParticles):
-        #     self.particleConcentrations[frame, i] = np.sum(np.sum(self.particleList[i].blocks))
-        #
-        # # If past current frame, get rate of product formation
-        # if (frame > 0):
-        #     self.rate[frame - 1] = self.particleConcentrations[frame - 1, -1] - self.particleConcentrations[frame, -1]
+        for i in range(self.numParticles):
+            self.particleConcentrations[frame, i] = np.sum(np.sum(self.particleList[i].blocks))
+
+        # If past current frame, get rate of product formation
+        if (frame > 0):
+            self.rate[frame - 1] = self.particleConcentrations[frame - 1, -1] - self.particleConcentrations[frame, -1]
         #
         # # Ensure no values are above max or below min (this shouldn't be an issue if update parameters are set appropriately)
         # np.where(self.particleConcentrations < 1, self.particleConcentrations, 1)
@@ -313,21 +313,20 @@ class Simulation(object):
             curGrid = self.particleList[particle].blocks
 
             # TODO: update celluar to be vectorized
-            # if "cellular" in self.init:
-            #     if (particle == 0) or (particle == 2):
-            #         grid = np.asarray(self.particleList[particle].getGrid())
-            #         nucleus = grid[int(self.length*0.5 - self.length*0.06):int(self.length*0.5 + self.length*0.06), int(self.length*0.5 - self.length*0.06):int(self.length*0.5 + self.length*0.06)]
-            #         self.laplacians[particle,:,:] = np.zeros((self.length, self.length), np.float64)
-            #         self.laplacians[particle,int(self.length*0.5 - self.length*0.06):int(self.length*0.5 + self.length*0.06),int(self.length*0.5 - self.length*0.06):int(self.length*0.5 + self.length*0.06)] = ndimage.convolve(nucleus, self.laplace_matrix, mode='wrap')
-            #     else:
-            #         #If user specific restricted cellular, use the restricted laplacian matrices
-            #         if "restricted" in self.init:
-            #             self.laplacians[particle,:,:] = ndimage.convolve(curGrid, RESTRICTED_LAPLACE_MATRIX,  mode='wrap')
-            #         else:
-            #             self.laplacians[particle,:,:] = ndimage.convolve(curGrid, self.laplace_matrix, mode='wrap')
-            # else:
-
-            self.laplacians[particle, :, :] = ndimage.convolve(curGrid, self.laplace_matrix, mode='wrap')
+            if "cellular" in self.init:
+                if (particle == 0) or (particle == 2):
+                    grid = self.particleList[particle].blocks
+                    nucleus = grid[int(self.length*0.5 - self.length*0.06):int(self.length*0.5 + self.length*0.06), int(self.length*0.5 - self.length*0.06):int(self.length*0.5 + self.length*0.06)]
+                    self.laplacians[particle,:,:] = np.zeros((self.length, self.length), np.float64)
+                    self.laplacians[particle,int(self.length*0.5 - self.length*0.06):int(self.length*0.5 + self.length*0.06),int(self.length*0.5 - self.length*0.06):int(self.length*0.5 + self.length*0.06)] = ndimage.convolve(nucleus, self.laplace_matrix, mode='wrap')
+                else:
+                    #If user specific restricted cellular, use the restricted laplacian matrices
+                    if "restricted" in self.init:
+                        self.laplacians[particle,:,:] = ndimage.convolve(curGrid, RESTRICTED_LAPLACE_MATRIX,  mode='wrap')
+                    else:
+                        self.laplacians[particle,:,:] = ndimage.convolve(curGrid, self.laplace_matrix, mode='wrap')
+            else:
+                self.laplacians[particle, :, :] = ndimage.convolve(curGrid, self.laplace_matrix, mode='wrap')
 
     def compute_maxwell(self):
         """
