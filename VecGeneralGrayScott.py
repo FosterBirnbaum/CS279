@@ -211,50 +211,62 @@ class Simulation(object):
 
         # Create numpy arrays to track total concentrations of all particles and rate
         # or product formation and figures to display concentrations and rate
-        self.particleConcentrations = np.zeros((iterations, self.numParticles, self.length, self.length), np.float32)
-        self.rate = np.zeros(iterations - 1, np.float64)
+        self.particleConcentrations = np.zeros((iterations, self.numParticles), np.float32)
+        self.rate = np.zeros(iterations - 1, np.float32)
         self.timesteps = np.arange(iterations)
         self.rateTimesteps = np.arange(1, iterations)
 
         a = np.zeros((self.length, self.length))
         self.im = plt.imshow(a, interpolation='none', aspect='auto', animated=True, vmin=0, vmax=0.5)
+        self.get_init_frame()
 
-        ani = animation.FuncAnimation(fig, self.get_frame, tqdm(range(iterations)), init_func=self.get_init_frame,
-                                      interval=50, blit=True, repeat_delay=1000)
+        ims = []
+        for frame in tqdm(range(iterations)):
+            im_data = self.get_frame(frame)
+            ims.append([plt.imshow(im_data, animated=True)])
 
-        if visual:
-            plt.show()
-
+        #Save video
+        ani = animation.ArtistAnimation(fig, ims, interval=50, blit=True, repeat_delay=1000)
+        print("Saving video")
         ani.save(run_name + "-video.avi")
         plt.close()
 
+        # ani = animation.FuncAnimation(fig, self.get_frame, tqdm(range(iterations)), init_func=self.get_init_frame,
+        #                               interval=50, blit=True, repeat_delay=1000)
+        #
+        # if visual:
+        #     plt.show()
+        #
+        # ani.save(run_name + "-video.avi")
+        # plt.close()
+
         # Plot concentration and rate
-        print("Creating plots...")
-        colors = ['r', 'g', 'b']
-        for i in range(self.numParticles):
-            plt.plot(self.timesteps,
-                     np.sum(np.sum(self.particleConcentrations[:, i, :, :], axis=-1), axis=-1) / (self.length ** 2),
-                     color=colors[i], label=('particle' + str(i)))
-        plt.legend()
-        plt.savefig(str(run_name) + '-concentrations.png')
-        plt.close()
-
-        plt.plot(self.rateTimesteps, self.rate, color=colors[0], label=('rate'))
-        plt.legend()
-        plt.savefig(str(run_name) + '-rate.png')
-        plt.close()
-
-        print("Complete.")
+        # print("Creating plots...")
+        # colors = ['r', 'g', 'b']
+        # for i in range(self.numParticles):
+        #     plt.plot(self.timesteps, self.particleConcentrations[:, i] / (self.length ** 2),
+        #              color=colors[i], label=('particle' + str(i)))
+        # plt.legend()
+        # plt.savefig(str(run_name) + '-concentrations.png')
+        # plt.close()
+        #
+        # plt.plot(self.rateTimesteps, self.rate, color=colors[0], label=('rate'))
+        # plt.legend()
+        # plt.savefig(str(run_name) + '-rate.png')
+        # plt.close()
+        #
+        # print("Complete.")
 
     def get_init_frame(self):
 
-        for i in range(self.numParticles):
-            self.particleConcentrations[0, i, :, :] = self.particleList[i].blocks
-
-        # np.where(particleConcentrations < 1, particleConcentrations, 1)
-        # np.where(particleConcentrations > 0, particleConcentrations, 0)
-        self.im.set_array(self.particleList[1].blocks)
-        return [self.im]
+        # for i in range(self.numParticles):
+        #     self.particleConcentrations[0, i] = np.sum(np.sum(self.particleList[i].blocks))
+        #
+        # np.where(self.particleConcentrations < 1, self.particleConcentrations, 1)
+        # np.where(self.particleConcentrations > 0, self.particleConcentrations, 0)
+        # self.im.set_array(self.particleList[1].blocks)
+        # return [self.im]
+        return self.particleList[1].blocks
 
     def get_frame(self, frame):
 
@@ -262,19 +274,19 @@ class Simulation(object):
         for step in range(self.updates_per_frame):
             self.update()
 
-        for i in range(self.numParticles):
-            self.particleConcentrations[frame, i, :, :] = self.particleList[i].blocks
-
-        # If past current frame, get rate of product formation
-        if (frame > 0):
-            self.rate[frame - 1] = sum(sum(self.particleConcentrations[frame, self.numParticles - 1, :, :])) - sum(
-                sum(self.particleConcentrations[frame - 1, self.numParticles - 1, :, :]))
-
-        # Ensure no values are above max or below min (this shouldn't be an issue if update parameters are set appropriately)
-        # np.where(particleConcentrations < 1, particleConcentrations, 1)
-        # np.where(particleConcentrations > 0, particleConcentrations, 0)
-        self.im.set_array(self.particleList[1].blocks)
-        return [self.im]
+        # for i in range(self.numParticles):
+        #     self.particleConcentrations[frame, i] = np.sum(np.sum(self.particleList[i].blocks))
+        #
+        # # If past current frame, get rate of product formation
+        # if (frame > 0):
+        #     self.rate[frame - 1] = self.particleConcentrations[frame - 1, -1] - self.particleConcentrations[frame, -1]
+        #
+        # # Ensure no values are above max or below min (this shouldn't be an issue if update parameters are set appropriately)
+        # np.where(self.particleConcentrations < 1, self.particleConcentrations, 1)
+        # np.where(self.particleConcentrations > 0, self.particleConcentrations, 0)
+        # self.im.set_array(self.particleList[1].blocks)
+        # return [self.im]
+        return self.particleList[1].blocks
 
     def update(self):
         """
