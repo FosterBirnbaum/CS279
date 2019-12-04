@@ -13,6 +13,7 @@ The backbone of the particle class was written by instructors of CS279 in Fall 2
 """
 
 from numpy import zeros
+import shutil
 from numpy import random
 from tqdm import tqdm
 from matplotlib import pyplot as plt
@@ -179,15 +180,21 @@ class Simulation(object):
                                                                               self.startingConcs[0]
                                                                               )
 
-        try:
-            output_path = os.path.join(OUTPUT_FOLDER, output_dir_name)
+        output_path = os.path.join(OUTPUT_FOLDER, output_dir_name)
+        self.output_path = output_path
+
+        if run_name == "test":
+            if os.path.exists(output_path):
+                shutil.rmtree(output_path)
+
+        if os.path.exists(output_path):
+            logging.error("Simulation already exists with same name and parameters. "
+                          + "Please change run_name or delete the existing directory.")
+            return
+        else:
             cur_dir = os.getcwd()
             os.mkdir(output_path)
             os.chdir(output_path)
-        except FileExistsError as e:
-            logging.error("Simulation already exists with same name and parameters. "
-                            + "Please change run_name or delete the existing directory.")
-            return
 
         # Run the proper simulation
         self.run_matplotlib(iterations, run_name)
@@ -233,15 +240,15 @@ class Simulation(object):
             ims.append([im])
 
             #Save individual frames (default commented out)
-            """
+            # """
             plt.figure()
             plt.imshow(particleConcentrations[frame, 0, :, :])
             plt.savefig(str(run_name) + '-' + str(frame) + '.png')
             plt.close()
-            """
-            # self.update()
-            for step in range(100):
-               self.update()
+            # """
+            self.update()
+            # for step in range(100):
+            #    self.update()
         
         #Save video
         ani = animation.ArtistAnimation(fig, ims, interval=10, blit=True, repeat_delay=1000)
@@ -286,6 +293,7 @@ class Simulation(object):
             #If init was set to cellular, then for the first and third particles restrict movement to the center of the grid (i.e., the nucleus)
             #and for all other particles, do not allow movement outside the cell
             curGrid = np.asarray(self.particleList[particle].getGrid())
+
             if "cellular" in self.init:
                 if (particle == 0) or (particle == 2):
                     grid = np.asarray(self.particleList[particle].getGrid())

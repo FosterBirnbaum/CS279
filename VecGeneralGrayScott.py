@@ -53,7 +53,7 @@ class Particle(object):
     def __init__(self, nX=25, nY=25, diffusion=1.0):
         self.nX = nX
         self.nY = nY
-        self.blocks = np.zeros((nX, nY))
+        self.blocks = np.zeros((nX, nY), dtype=np.float64)
         self.diffusion = diffusion
 
 
@@ -265,6 +265,10 @@ class Simulation(object):
             self.rate[frame-1] = self.particleConcentrations[frame, -1] - self.particleConcentrations[frame - 1, -1]
 
         self.im.set_array(self.particleList[1].blocks)
+        # plt.figure()
+        # self.im = plt.imshow(self.particleList[1].blocks)
+        # plt.savefig(str(frame) + '.png')
+        # plt.close()
         return [self.im]
 
     def update(self):
@@ -275,6 +279,10 @@ class Simulation(object):
         concentrationUpdates = self.get_particle_derivatives()
         for particle in range(self.numParticles):
             self.particleList[particle].blocks += concentrationUpdates[particle]
+            # Ensure no values are above max or below min
+            # (this shouldn't be an issue if update parameters are set appropriately)
+            # np.where(self.particleList[particle].blocks>1, self.particleList[particle].blocks, 1)
+            # np.where(self.particleList[particle].blocks<0, self.particleList[particle].blocks, 0)
 
     def compute_laplacians(self):
         """
@@ -330,9 +338,9 @@ class Simulation(object):
         self.compute_laplacians()
 
         # Get starting concentrations and laplacian values
-        conc_A = self.particleList[0].blocks
-        conc_B = self.particleList[1].blocks
-        conc_C = self.particleList[2].blocks if self.numParticles > 2 else 0
+        conc_A = np.copy(self.particleList[0].blocks)
+        conc_B = np.copy(self.particleList[1].blocks)
+        conc_C = np.copy(self.particleList[2].blocks) if self.numParticles > 2 else 0
         lapA = self.laplacians[0, :, :]
         lapB = self.laplacians[1, :, :]
         lapC = self.laplacians[2, :, :] if self.numParticles > 2 else 0
@@ -351,6 +359,7 @@ class Simulation(object):
 
         elif(self.orders[0] == 1):
 
+            # masks for reactions happening
             curEnergy = self.compute_maxwell()
             react_AB = curEnergy > self.activationEnergies[0]
             react_C = curEnergy > self.activationEnergies[1]
@@ -361,9 +370,9 @@ class Simulation(object):
             conc_A += dAdt
             conc_B += dBdt
             conc_C += dCdt
-            dAdt = dAdt - np.multiply(react_AB, np.multiply(conc_A, conc_B)) + np.multiply(react_C, conc_C)
-            dBdt = dBdt - np.multiply(react_AB, np.multiply(conc_A, conc_B)) + np.multiply(react_C, conc_C)
-            dCdt = dCdt + np.multiply(react_AB, np.multiply(conc_A, conc_B)) - np.multiply(react_C, conc_C)
+            dAdt = dAdt - react_AB*conc_A*conc_B + react_C*conc_C
+            dBdt = dBdt - react_AB*conc_A*conc_B + react_C*conc_C
+            dCdt = dCdt + react_AB*conc_A*conc_B - react_C*conc_C
 
         elif(self.orders[0] == 2):
 
@@ -377,9 +386,9 @@ class Simulation(object):
             conc_A += dAdt
             conc_B += dBdt
             conc_C += dCdt
-            dAdt = dAdt - 2*react_AB*conc_A**2*conc_B + 2*react_C*conc_C
-            dBdt = dBdt - react_AB*conc_A**2*conc_B + react_C*conc_C
-            dCdt = dCdt + react_AB*conc_A**2*conc_B - react_C*conc_C
+            dAdt = dAdt - 2*(react_AB * conc_A**2 * conc_B) + 2*(react_C * conc_C)
+            dBdt = dBdt - react_AB * conc_A**2 * conc_B + react_C * conc_C
+            dCdt = dCdt + react_AB * conc_A**2 * conc_B - react_C * conc_C
 
         else:
             raise ValueError("Reaction order not recognized.")
@@ -418,25 +427,19 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Decide what type of simulation the user wants to run
+    # Decide what type of simulation the user wants to run
     if args.type[0] == "2Particles":
-        sim = Simulation(n=2, orders=[-1, -1], diffusions=[1, 0.5], feed=args.feed, kill=args.kill, length=args.length,
-                         init="pointMass")
+        sim = Simulation(n=2, orders=[-1,-1], diffusions = [1, 0.5], feed = args.feed, kill = args.kill, length=args.length, init="pointMass")
     elif args.type[0] == "2ParticlesZeroOrder":
-        sim = Simulation(n=2, orders=[0, 0], diffusions=[1, 0.5], activationEnergies=[3, 3], temp=298, length=args.length,
-                         init="pointMass")
+        sim = Simulation(n=2, orders=[0, 0], diffusions = [1, 0.5], activationEnergies = [3, 3], temp = 298, length=args.length, init="pointMass")
     elif args.type[0] == "3ParticlesFirstOrder":
-        sim = Simulation(n=3, orders=[1, 1, 1], diffusions=[1, 1, 0.5], activationEnergies=[4, 4], temp=350, length=args.length,
-                         init="pointMass", startingConcs=[0.5, 0.25, 0])
+        sim = Simulation(n=3, orders=[1,1,1], diffusions = [1, 1, 0.5], activationEnergies = [4, 4], temp = 350, length=args.length, init="even", startingConcs=[0.5, 0.25, 0])
     elif args.type[0] == "3ParticlesSecondOrder":
-        sim = Simulation(n=3, orders=[2, 2, 2], diffusions=[1, 1, 0.5], activationEnergies=[3, 3], temp=298, length=args.length,
-                         init="even", startingConcs=[0.5, 0.25, 0])
+        sim = Simulation(n=3, orders=[2,2,2], diffusions = [1, 1, 0.5], activationEnergies = [3, 3], temp = 298, length=args.length, init="even", startingConcs=[0.5, 0.25, 0])
     elif args.type[0] == "CellularOpen":
-        sim = Simulation(n=3, orders=[1, 1, 1], diffusions=[1, 1, 0.5], activationEnergies=[3, 3], temp=350, length=args.length,
-                         init="cellular-open", startingConcs=[0.5, 1, 0])
+        sim = Simulation(n=3, orders=[1,1,1], diffusions = [1, 1, 0.5], activationEnergies = [3, 3], temp = 350, length=args.length, init="cellular-open", startingConcs=[0.5, 1, 0])
     elif args.type[0] == "CellularRestricted":
-        sim = Simulation(n=3, orders=[1, 1, 1], diffusions=[1, 1, 0.5], activationEnergies=[3, 3], temp=350, length=args.length,
-                         init="cellular-restricted", startingConcs=[0.5, 1, 0],
-                         laplace_matrix=RESTRICTED_LAPLACE_MATRIX)
+        sim = Simulation(n=3, orders=[1,1,1], diffusions = [1, 1, 0.5], activationEnergies = [3, 3], temp = 350, length=args.length, init="cellular-restricted", startingConcs=[0.5, 1, 0], laplace_matrix=RESTRICTED_LAPLACE_MATRIX)
     else:
         # argparse should handle this, but just in case
         sim = None
