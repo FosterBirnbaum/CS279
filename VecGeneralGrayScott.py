@@ -18,7 +18,8 @@ from tqdm import tqdm
 from matplotlib import pyplot as plt
 import matplotlib
 
-matplotlib.use("Agg")
+# matplotlib.use("Agg")
+import sklearn.preprocessing as sk
 import matplotlib.animation as animation
 from matplotlib.animation import FFMpegWriter
 import numpy as np
@@ -27,6 +28,7 @@ import scipy.stats as stats
 import os
 import sys
 import logging
+import shutil
 import argparse
 from multiprocessing import Pool
 import time
@@ -156,7 +158,7 @@ class Simulation(object):
                     else:
                         self.particleList[1].blocks[i, j] = 0
 
-    def run(self, iterations, using="cv2", run_name="simple"):
+    def run(self, iterations, run_name="simple", updates_per_frame=25, visual=False):
         """
         Runs the simulation and stores frames to a result directory in `simulatons/`
         :param iterations: number of iterations to run the simulation for
@@ -166,100 +168,113 @@ class Simulation(object):
         """
 
         # Create and go to output directory
-        output_dir_name = "{}_iterations-{}_length-{}_init-{}_starting-{}".format(run_name,
-                                                                                  iterations,
-                                                                                  self.length,
-                                                                                  self.init,
-                                                                                  self.startingConcs[0]
-                                                                                  )
+        output_dir_name = "{}_iterations-{}_length-{}_init-{}_starting-{}_kill-{}_feed-{}_iterations_{}".\
+            format(run_name, iterations, self.length, self.init, self.startingConcs[0],
+                   self.kill, self.feed, iterations)
 
-        try:
-            output_path = os.path.join(OUTPUT_FOLDER, output_dir_name)
-            cur_dir = os.getcwd()
-            os.mkdir(output_path)
-            os.chdir(output_path)
-        except FileExistsError as e:
+        output_path = os.path.join(OUTPUT_FOLDER, output_dir_name)
+
+        if run_name == "test":
+            if os.path.exists(output_path):
+                shutil.rmtree(output_path)
+
+        if os.path.exists(output_path):
             logging.error("Simulation already exists with same name and parameters. "
                           + "Please change run_name or delete the existing directory.")
             return
+        else:
+            cur_dir = os.getcwd()
+            os.mkdir(output_path)
+            os.chdir(output_path)
 
         # Run the proper simulation
-        self.run_matplotlib(iterations, run_name)
+        self.run_matplotlib(iterations, run_name, updates_per_frame=updates_per_frame, visual=visual)
 
         # Change back to the original directory
         os.chdir(cur_dir)
 
-    def run_matplotlib(self, iterations, run_name):
+    def run_matplotlib(self, iterations, run_name, save_frames=False, updates_per_frame=25, visual=False):
         """
         Use matplotlib as graphics library to create a video of the simulation.
         :param iterations: Number of iterations for simulation
-        :param run_name: Prefix for frame files ("<run_name>-<output_type>.png")
+        :param run_name: Prefix for run files ("<run_name>-<output_type>")
+        :param save_frames: If true, saves individual frames frame files ("<run_name>-<output_type>.png")
         :return: None
         """
+
+        self.updates_per_frame = updates_per_frame
 
         # Start creating video
         metadata = dict(title='Movie Test', artist='Matplotlib', comment='Movie support!')
         writer = FFMpegWriter(fps=15, metadata=metadata)
         fig = plt.figure()
-        ims = []
 
-        # Create numpy arrays to track total concentrations of all particles and rate or product formation and figures to display concentrations and rate
-        particleConcentrations = np.zeros((iterations, self.numParticles, self.length, self.length), np.float64)
-        rate = np.zeros(iterations - 1, np.float64)
-        timesteps = np.arange(iterations)
-        rateTimesteps = np.arange(1, iterations)
+        # Create numpy arrays to track total concentrations of all particles and rate
+        # or product formation and figures to display concentrations and rate
+        self.particleConcentrations = np.zeros((iterations, self.numParticles, self.length, self.length), np.float32)
+        self.rate = np.zeros(iterations - 1, np.float64)
+        self.timesteps = np.arange(iterations)
+        self.rateTimesteps = np.arange(1, iterations)
 
-        for frame in tqdm(range(iterations)):
-            # Get concentration for current frame
-            for i in range(self.numParticles):
-                particleConcentrations[frame, i, :, :] = np.asarray(self.particleList[i].blocks)
+        a = np.zeros((self.length, self.length))
+        self.im = plt.imshow(a, interpolation='none', aspect='auto', animated=True, vmin=0, vmax=0.5)
 
-            # If past current frame, get rate of product formation
-            if (frame > 0):
-                rate[frame - 1] = sum(sum(particleConcentrations[frame, self.numParticles - 1, :, :])) - sum(
-                    sum(particleConcentrations[frame - 1, self.numParticles - 1, :, :]))
+        ani = animation.FuncAnimation(fig, self.get_frame, tqdm(range(iterations)), init_func=self.get_init_frame,
+                                      interval=50, blit=True, repeat_delay=1000)
 
-            # Ensure no values are above max or below min (this shouldn't be an issue if update parameters are set appropriately)
-            np.where(particleConcentrations < 1, particleConcentrations, 1)
-            np.where(particleConcentrations > 0, particleConcentrations, 0)
+        if visual:
+            plt.show()
 
-            im = plt.imshow(particleConcentrations[frame, 1, :, :], animated=True)
-            ims.append([im])
-
-            # Save individual frames (default commented out)
-            """
-            plt.figure()
-            plt.imshow(particleConcentrations[frame, 0, :, :])
-            plt.savefig(str(run_name) + '-' + str(frame) + '.png')
-            plt.close()
-            """
-            # self.update()
-            for step in range(25):
-                self.update()
-
-        logging.info("Saving video to file...")
-        # Save video
-        ani = animation.ArtistAnimation(fig, ims, interval=10, blit=True, repeat_delay=1000)
         ani.save(run_name + "-video.avi")
         plt.close()
 
         # Plot concentration and rate
-        logging.info("Creating plots...")
+        print("Creating plots...")
         colors = ['r', 'g', 'b']
         for i in range(self.numParticles):
-            plt.plot(timesteps,
-                     np.sum(np.sum(particleConcentrations[:, i, :, :], axis=-1), axis=-1) / (self.length ** 2),
+            plt.plot(self.timesteps,
+                     np.sum(np.sum(self.particleConcentrations[:, i, :, :], axis=-1), axis=-1) / (self.length ** 2),
                      color=colors[i], label=('particle' + str(i)))
         plt.legend()
         plt.savefig(str(run_name) + '-concentrations.png')
         plt.close()
 
-        plt.plot(rateTimesteps, rate, color=colors[0], label=('rate'))
+        plt.plot(self.rateTimesteps, self.rate, color=colors[0], label=('rate'))
         plt.legend()
         plt.savefig(str(run_name) + '-rate.png')
         plt.close()
 
-        logging.info("Complete.")
+        print("Complete.")
+
+    def get_init_frame(self):
+
+        for i in range(self.numParticles):
+            self.particleConcentrations[0, i, :, :] = self.particleList[i].blocks
+
+        # np.where(particleConcentrations < 1, particleConcentrations, 1)
+        # np.where(particleConcentrations > 0, particleConcentrations, 0)
+        self.im.set_array(self.particleList[1].blocks)
+        return [self.im]
+
+    def get_frame(self, frame):
+
+        # perform multiple update steps per frame to speed up simulation
+        for step in range(self.updates_per_frame):
+            self.update()
+
+        for i in range(self.numParticles):
+            self.particleConcentrations[frame, i, :, :] = self.particleList[i].blocks
+
+        # If past current frame, get rate of product formation
+        if (frame > 0):
+            self.rate[frame - 1] = sum(sum(self.particleConcentrations[frame, self.numParticles - 1, :, :])) - sum(
+                sum(self.particleConcentrations[frame - 1, self.numParticles - 1, :, :]))
+
+        # Ensure no values are above max or below min (this shouldn't be an issue if update parameters are set appropriately)
+        # np.where(particleConcentrations < 1, particleConcentrations, 1)
+        # np.where(particleConcentrations > 0, particleConcentrations, 0)
+        self.im.set_array(self.particleList[1].blocks)
+        return [self.im]
 
     def update(self):
         """
@@ -396,26 +411,38 @@ if __name__ == "__main__":
     parser.add_argument('--iterations', type=int, default=50,
                         help='Enter the number of iterations for which to run the simulation.')
 
+    parser.add_argument('--feed', type=float, default=0.0362,
+                        help='Feed rate.')
+    parser.add_argument('--kill', type=float, default=0.062,
+                        help='Kill rate.')
+    parser.add_argument('--length', type=int, default=50,
+                        help='Simulation dimension.')
+
+    parser.add_argument('--updates_per_frame', type=int, default=25,
+                        help='Number of updates of simulation to perform for each frame of the animation.')
+    parser.add_argument('--visual', type=bool,
+                        help='Whether or not to visualize the simulation real-time.')
+
     args = parser.parse_args()
 
     # Decide what type of simulation the user wants to run
     if args.type[0] == "2Particles":
-        sim = Simulation(n=2, orders=[-1, -1], diffusions=[1, 0.5], feed=0.0362, kill=0.062, length=50,
+        sim = Simulation(n=2, orders=[-1, -1], diffusions=[1, 0.5], feed=args.feed, kill=args.kill, length=args.length,
                          init="pointMass")
     elif args.type[0] == "2ParticlesZeroOrder":
-        sim = Simulation(n=2, orders=[0, 0], diffusions=[1, 0.5], activationEnergies=[3, 3], temp=298, length=50,
+        sim = Simulation(n=2, orders=[0, 0], diffusions=[1, 0.5], activationEnergies=[3, 3], temp=298, length=args.length,
                          init="pointMass")
     elif args.type[0] == "3ParticlesFirstOrder":
-        sim = Simulation(n=3, orders=[1, 1, 1], diffusions=[1, 1, 0.5], activationEnergies=[4, 4], temp=350, length=50,
+        sim = Simulation(n=3, orders=[1, 1, 1], diffusions=[1, 1, 0.5], activationEnergies=[4, 4], temp=350, length=args.length,
                          init="even", startingConcs=[0.5, 0.25, 0])
     elif args.type[0] == "3ParticlesSecondOrder":
-        sim = Simulation(n=3, orders=[2, 2, 2], diffusions=[1, 1, 0.5], activationEnergies=[3, 3], temp=298, length=50,
+        sim = Simulation(n=3, orders=[2, 2, 2], diffusions=[1, 1, 0.5], activationEnergies=[3, 3], temp=298, length=args.length,
                          init="even", startingConcs=[0.5, 0.25, 0])
     elif args.type[0] == "CellularOpen":
-        sim = Simulation(n=3, orders=[1, 1, 1], diffusions=[1, 1, 0.5], activationEnergies=[3, 3], temp=350, length=50,
+        sim = Simulation(n=3, orders=[1, 1, 1], diffusions=[1, 1, 0.5], activationEnergies=[3, 3], temp=350, length=args.length,
                          init="cellular-open", startingConcs=[0.5, 1, 0])
     elif args.type[0] == "CellularRestricted":
-        sim = Simulation(n=3, orders=[1, 1, 1], diffusions=[1, 1, 0.5], activationEnergies=[3, 3], temp=350, length=50,
+        sim = Simulation(n=3, orders=[1, 1, 1], diffusions=[1, 1, 0.5], activationEnergies=[3, 3], temp=350, length=args.length,
                          init="cellular-restricted", startingConcs=[0.5, 1, 0],
                          laplace_matrix=RESTRICTED_LAPLACE_MATRIX)
     else:
@@ -424,4 +451,5 @@ if __name__ == "__main__":
         raise Exception("Unrecognized simulation type. %r" % args.type[0])
 
     # Run the selected simulation and save to the results to simulations\[<input name>]-[<params>]
-    sim.run(iterations=args.iterations, using="matplotlib", run_name=args.run_name)
+    sim.run(iterations=args.iterations, run_name=args.run_name, updates_per_frame=args.updates_per_frame,
+            visual=args.visual)
