@@ -239,9 +239,9 @@ class Simulation(object):
             plt.savefig(str(run_name) + '-' + str(frame) + '.png')
             plt.close()
             """
-            self.update()
-            #for step in range(25):
-            #    self.update()
+            # self.update()
+            for step in range(100):
+               self.update()
         
         #Save video
         ani = animation.ArtistAnimation(fig, ims, interval=10, blit=True, repeat_delay=1000)
