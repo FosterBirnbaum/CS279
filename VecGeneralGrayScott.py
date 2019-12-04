@@ -218,44 +218,46 @@ class Simulation(object):
 
         a = np.zeros((self.length, self.length))
         self.im = plt.imshow(a, interpolation='none', aspect='auto', animated=True, vmin=0, vmax=0.5)
-        self.get_init_frame()
+        # self.get_init_frame()
 
-        ims = []
-        for frame in tqdm(range(iterations)):
-            im_data = self.get_frame(frame)
-            ims.append([plt.imshow(im_data, animated=True)])
-
-        #Save video
-        ani = animation.ArtistAnimation(fig, ims, interval=50, blit=True, repeat_delay=1000)
-        print("Saving video")
-        ani.save(run_name + "-video.avi")
-        plt.close()
-
-        # ani = animation.FuncAnimation(fig, self.get_frame, tqdm(range(iterations)), init_func=self.get_init_frame,
-        #                               interval=50, blit=True, repeat_delay=1000)
+        # ims = []
+        # for frame in tqdm(range(iterations)):
+        #     im_data = self.get_frame(frame)
+        #     ims.append([plt.imshow(im_data, animated=True)])
         #
-        # if visual:
-        #     plt.show()
-        #
+        # #Save video
+        # ani = animation.ArtistAnimation(fig, ims, interval=50, blit=True, repeat_delay=1000)
+        # print("Saving video")
         # ani.save(run_name + "-video.avi")
         # plt.close()
 
-        # Plot concentration and rate
-        print("Creating plots...")
-        colors = ['r', 'g', 'b']
-        for i in range(self.numParticles):
-            plt.plot(self.timesteps, self.particleConcentrations[:, i] / (self.length ** 2),
-                     color=colors[i], label=('particle' + str(i)))
-        plt.legend()
-        plt.savefig(str(run_name) + '-concentrations.png')
-        plt.close()
+        ani = animation.FuncAnimation(fig, self.get_frame, tqdm(range(iterations)), init_func=self.get_init_frame,
+                                      interval=50, blit=True, repeat_delay=1000)
 
-        plt.plot(self.rateTimesteps, self.rate, color=colors[0], label=('rate'))
-        plt.legend()
-        plt.savefig(str(run_name) + '-rate.png')
-        plt.close()
+        if visual:
+            try:
+                plt.show()
+                ani.save(run_name + "-video.avi")
+                plt.close()
 
-        print("Complete.")
+                # Plot concentration and rate
+                print("Creating plots...")
+                colors = ['r', 'g', 'b']
+                for i in range(self.numParticles):
+                    plt.plot(self.timesteps, self.particleConcentrations[:, i] / (self.length ** 2),
+                             color=colors[i], label=('particle' + str(i)))
+                plt.legend()
+                plt.savefig(str(run_name) + '-concentrations.png')
+                plt.close()
+
+                plt.plot(self.rateTimesteps, self.rate, color=colors[0], label=('rate'))
+                plt.legend()
+                plt.savefig(str(run_name) + '-rate.png')
+                plt.close()
+
+                print("Complete.")
+            except KeyboardInterrupt:
+                pass
 
     def get_init_frame(self):
 
@@ -264,9 +266,9 @@ class Simulation(object):
         #
         # np.where(self.particleConcentrations < 1, self.particleConcentrations, 1)
         # np.where(self.particleConcentrations > 0, self.particleConcentrations, 0)
-        # self.im.set_array(self.particleList[1].blocks)
-        # return [self.im]
-        return self.particleList[1].blocks
+        self.im.set_array(self.particleList[1].blocks)
+        return [self.im]
+        # return self.particleList[1].blocks
 
     def get_frame(self, frame):
 
@@ -284,9 +286,9 @@ class Simulation(object):
         # # Ensure no values are above max or below min (this shouldn't be an issue if update parameters are set appropriately)
         # np.where(self.particleConcentrations < 1, self.particleConcentrations, 1)
         # np.where(self.particleConcentrations > 0, self.particleConcentrations, 0)
-        # self.im.set_array(self.particleList[1].blocks)
-        # return [self.im]
-        return self.particleList[1].blocks
+        self.im.set_array(self.particleList[1].blocks)
+        return [self.im]
+        # return self.particleList[1].blocks
 
     def update(self):
         """
