@@ -8,7 +8,7 @@ to run a variety of simulation types. The available types are as follows:
     -Custom: Allows user to define input parameters
 All simulations are saved in video format, as are plots of relative concentrations of all species involved and a plot of the rate of formation of product (if one is involved).
 
-Written by Collin Schlager and Foster Birnbaum (fosb@stanford.edu) -- 12/6/2019
+Written by Collin Schlager (schlager@stanford.edu) and Foster Birnbaum (fosb@stanford.edu) -- 12/6/2019
 The backbone of the particle class was written by instructors of CS279 in Fall 2019
 """
 
@@ -16,22 +16,19 @@ from numpy import zeros
 from numpy import random
 from tqdm import tqdm
 from matplotlib import pyplot as plt
-import matplotlib
-
-# matplotlib.use("Agg")
-import sklearn.preprocessing as sk
-import matplotlib.animation as animation
-from matplotlib.animation import FFMpegWriter
+import os, sys, subprocess
 import numpy as np
 from scipy import ndimage
 import scipy.stats as stats
 import os
+import glob
 import sys
 import logging
 import shutil
 import argparse
-from multiprocessing import Pool
-import time
+import matplotlib.animation as animation
+from matplotlib.animation import FFMpegWriter
+
 
 np.set_printoptions(precision=2)
 
@@ -52,8 +49,6 @@ Defines the particle class that contains information on a specific particle in t
 Each particle is defined as an nX by nY grid, with values in each grid box representing the 
 concentration of that particle at that position.
 """
-
-
 class Particle(object):
     def __init__(self, nX=25, nY=25, diffusion=1.0):
         self.nX = nX
@@ -62,12 +57,18 @@ class Particle(object):
         self.diffusion = diffusion
 
 
+def open_file(filename):
+    if sys.platform == "win32":
+        os.startfile(filename)
+    else:
+        opener = "open" if sys.platform == "darwin" else "xdg-open"
+        subprocess.call([opener, filename])
+
+
 """
 Defines the Simulation object that runs a reaction-diffusion simulation according
 to user input parameters. For a list of sample input parameters, please see top of file comment.
 """
-
-
 class Simulation(object):
     def __init__(self, n=2, orders=[-1, -1], diffusions=[1, 1], feed=0.0545, kill=0.03, activationEnergies=[1, 1],
                  temp=298,
@@ -86,7 +87,7 @@ class Simulation(object):
         :param length: side-length of simulation square
         :param maxConc: max concentration
         :param laplace_matrix: 3x3 convolution matrix
-        :param intit: string identifying how grid shoud be initialized
+        :param intit: string identifying how grid should be initialized
         :return None
         """
 
@@ -173,6 +174,7 @@ class Simulation(object):
                    self.kill, self.feed, iterations)
 
         output_path = os.path.join(OUTPUT_FOLDER, output_dir_name)
+        self.output_path = output_path
 
         if run_name == "test":
             if os.path.exists(output_path):
@@ -193,7 +195,7 @@ class Simulation(object):
         # Change back to the original directory
         os.chdir(cur_dir)
 
-    def run_matplotlib(self, iterations, run_name, save_frames=False, updates_per_frame=25, visual=False):
+    def run_matplotlib(self, iterations, run_name, updates_per_frame=25, visual=False):
         """
         Use matplotlib as graphics library to create a video of the simulation.
         :param iterations: Number of iterations for simulation
@@ -218,57 +220,36 @@ class Simulation(object):
 
         a = np.zeros((self.length, self.length))
         self.im = plt.imshow(a, interpolation='none', aspect='auto', animated=True, vmin=0, vmax=0.5)
-        # self.get_init_frame()
 
-        # ims = []
-        # for frame in tqdm(range(iterations)):
-        #     im_data = self.get_frame(frame)
-        #     ims.append([plt.imshow(im_data, animated=True)])
-        #
-        # #Save video
-        # ani = animation.ArtistAnimation(fig, ims, interval=50, blit=True, repeat_delay=1000)
-        # print("Saving video")
-        # ani.save(run_name + "-video.avi")
-        # plt.close()
-
-        ani = animation.FuncAnimation(fig, self.get_frame, tqdm(range(iterations)), init_func=self.get_init_frame,
+        ani = animation.FuncAnimation(fig, self.get_frame, tqdm(range(iterations)),
                                       interval=50, blit=True, repeat_delay=1000)
 
         if visual:
             try:
                 plt.show()
-                ani.save(run_name + "-video.avi")
-                plt.close()
 
-                # Plot concentration and rate
-                print("Creating plots...")
-                colors = ['r', 'g', 'b']
-                for i in range(self.numParticles):
-                    plt.plot(self.timesteps, self.particleConcentrations[:, i] / (self.length ** 2),
-                             color=colors[i], label=('particle' + str(i)))
-                plt.legend()
-                plt.savefig(str(run_name) + '-concentrations.png')
-                plt.close()
-
-                plt.plot(self.rateTimesteps, self.rate, color=colors[0], label=('rate'))
-                plt.legend()
-                plt.savefig(str(run_name) + '-rate.png')
-                plt.close()
-
-                print("Complete.")
             except KeyboardInterrupt:
                 pass
 
-    def get_init_frame(self):
+        ani.save(run_name + "-video.avi")
+        plt.close()
 
+        # Plot concentration and rate
+        print("Creating plots...")
+        colors = ['r', 'g', 'b']
         for i in range(self.numParticles):
-            self.particleConcentrations[0, i] = np.sum(np.sum(self.particleList[i].blocks))
-        #
-        # np.where(self.particleConcentrations < 1, self.particleConcentrations, 1)
-        # np.where(self.particleConcentrations > 0, self.particleConcentrations, 0)
-        self.im.set_array(self.particleList[1].blocks)
-        return [self.im]
-        # return self.particleList[1].blocks
+            plt.plot(self.timesteps, self.particleConcentrations[:, i] / (self.length ** 2),
+                     color=colors[i], label=('particle' + str(i)))
+        plt.legend()
+        plt.savefig(str(run_name) + '-concentrations.png')
+        plt.close()
+
+        plt.plot(self.rateTimesteps, self.rate, color=colors[0], label=('rate'))
+        plt.legend()
+        plt.savefig(str(run_name) + '-rate.png')
+        plt.close()
+
+        print("Complete.")
 
     def get_frame(self, frame):
 
@@ -277,29 +258,20 @@ class Simulation(object):
             self.update()
 
         for i in range(self.numParticles):
-            self.particleConcentrations[frame, i] = np.sum(np.sum(self.particleList[i].blocks))
+            self.particleConcentrations[frame, i] = np.sum(self.particleList[i].blocks)
 
         # If past current frame, get rate of product formation
         if (frame > 0):
-            self.rate[frame - 1] = self.particleConcentrations[frame - 1, -1] - self.particleConcentrations[frame, -1]
-        #
-        # # Ensure no values are above max or below min (this shouldn't be an issue if update parameters are set appropriately)
-        # np.where(self.particleConcentrations < 1, self.particleConcentrations, 1)
-        # np.where(self.particleConcentrations > 0, self.particleConcentrations, 0)
+            self.rate[frame-1] = self.particleConcentrations[frame, -1] - self.particleConcentrations[frame - 1, -1]
+
         self.im.set_array(self.particleList[1].blocks)
         return [self.im]
-        # return self.particleList[1].blocks
 
     def update(self):
         """
         Update step. Updates blocks of all types of particles using the framework input by user.
         :return: None
         """
-
-        # Update the laplacians for all particles for this time step
-        self.compute_laplacians()
-
-        # Loop through all points in grid and update using d[Particle]/dt as defined by Gray-Scott or reaction kinetics
         concentrationUpdates = self.get_particle_derivatives()
         for particle in range(self.numParticles):
             self.particleList[particle].blocks += concentrationUpdates[particle]
@@ -309,12 +281,13 @@ class Simulation(object):
         Compute the laplacians for all particles using the 3x3 convolution matrix.
         :return: None
         """
+
         for particle in range(self.numParticles):
-            # If init was set to cellular, then for the first and third particles restrict movement to the center of the grid (i.e., the nucleus)
-            # and for all other particles, do not allow movement outside the cell
             curGrid = self.particleList[particle].blocks
 
-            # TODO: update celluar to be vectorized
+            # If init was set to cellular, then for the first and third particles
+            # restrict movement to the center of the grid (i.e., the nucleus)
+            # and for all other particles, do not allow movement outside the cell
             if "cellular" in self.init:
                 if (particle == 0) or (particle == 2):
                     grid = self.particleList[particle].blocks
@@ -335,10 +308,11 @@ class Simulation(object):
         Compute the energy of the system according to the maxwell-boltzmann distribution
         :return: energy sampled from appropriate maxwell-boltzmann distribution
         """
-        maxwell = stats.maxwell
-        scale = 10 * ((self.temp - DEFAULT_TEMP_LOWERBOUND) / (DEFAULT_TEMP_UPPERBOUND - DEFAULT_TEMP_LOWERBOUND))
-        energy = maxwell.rvs(loc=0, scale=scale, size=1)
-        return energy[0]
+        scale = 10 * ((self.temp - DEFAULT_TEMP_LOWERBOUND) /
+                      (DEFAULT_TEMP_UPPERBOUND - DEFAULT_TEMP_LOWERBOUND))
+        energy = stats.maxwell.rvs(loc=0, scale=scale, size=self.length**2)
+        energy = energy.reshape(self.length, self.length)
+        return energy
 
     def get_particle_derivatives(self):
         """
@@ -352,6 +326,9 @@ class Simulation(object):
         :param j: y location to update
         :return: dParticledt evaluated at (i, j) for input particle
         """
+
+        self.compute_laplacians()
+
         # Get starting concentrations and laplacian values
         conc_A = self.particleList[0].blocks
         conc_B = self.particleList[1].blocks
@@ -359,8 +336,7 @@ class Simulation(object):
         lapA = self.laplacians[0, :, :]
         lapB = self.laplacians[1, :, :]
         lapC = self.laplacians[2, :, :] if self.numParticles > 2 else 0
-        react_AB = 0
-        react_C = 0
+
         if (self.orders[0] == -1):
 
             dAdt = self.particleList[0].diffusion * lapA \
@@ -373,38 +349,41 @@ class Simulation(object):
 
             dCdt = 0
 
+        elif(self.orders[0] == 1):
+
+            curEnergy = self.compute_maxwell()
+            react_AB = curEnergy > self.activationEnergies[0]
+            react_C = curEnergy > self.activationEnergies[1]
+
+            dAdt = self.particleList[0].diffusion*lapA
+            dBdt = self.particleList[1].diffusion*lapB
+            dCdt = self.particleList[2].diffusion*lapC
+            conc_A += dAdt
+            conc_B += dBdt
+            conc_C += dCdt
+            dAdt = dAdt - np.multiply(react_AB, np.multiply(conc_A, conc_B)) + np.multiply(react_C, conc_C)
+            dBdt = dBdt - np.multiply(react_AB, np.multiply(conc_A, conc_B)) + np.multiply(react_C, conc_C)
+            dCdt = dCdt + np.multiply(react_AB, np.multiply(conc_A, conc_B)) - np.multiply(react_C, conc_C)
+
+        elif(self.orders[0] == 2):
+
+            curEnergy = self.compute_maxwell()
+            react_AB = curEnergy > self.activationEnergies[0]
+            react_C = curEnergy > self.activationEnergies[1]
+
+            dAdt = self.particleList[0].diffusion*lapA
+            dBdt = self.particleList[1].diffusion*lapB
+            dCdt = self.particleList[2].diffusion*lapC
+            conc_A += dAdt
+            conc_B += dBdt
+            conc_C += dCdt
+            dAdt = dAdt - 2*react_AB*conc_A**2*conc_B + 2*react_C*conc_C
+            dBdt = dBdt - react_AB*conc_A**2*conc_B + react_C*conc_C
+            dCdt = dCdt + react_AB*conc_A**2*conc_B - react_C*conc_C
+
         else:
-            raise ValueError("Vectorization not yet implemented for this reaction order.")
-        # elif(self.orders[0] == 1):
-        #     curEnergy = self.compute_maxwell()
-        #     if(curEnergy > self.activationEnergies[0]):
-        #         react_AB = 1
-        #     if(curEnergy > self.activationEnergies[1]):
-        #         react_C = 1
-        #     dAdt = self.particleList[0].diffusion*lapA
-        #     dBdt = self.particleList[1].diffusion*lapB
-        #     dCdt = self.particleList[2].diffusion*lapC
-        #     conc_A += dAdt
-        #     conc_B += dBdt
-        #     conc_C += dCdt
-        #     dAdt = dAdt - react_AB*conc_A*conc_B + react_C*conc_C
-        #     dBdt = dBdt - react_AB*conc_A*conc_B + react_C*conc_C
-        #     dCdt = dCdt + react_AB*conc_A*conc_B - react_C*conc_C
-        # elif(self.orders[0] == 2):
-        #     curEnergy = self.compute_maxwell()
-        #     if(curEnergy > self.activationEnergies[0]):
-        #         react_AB = 1
-        #     if(curEnergy > self.activationEnergies[1]):
-        #         react_C = 1
-        #     dAdt = self.particleList[0].diffusion*lapA
-        #     dBdt = self.particleList[1].diffusion*lapB
-        #     dCdt = self.particleList[2].diffusion*lapC
-        #     conc_A += dAdt
-        #     conc_B += dBdt
-        #     conc_C += dCdt
-        #     dAdt = dAdt - 2*react_AB*conc_A**2*conc_B + 2*react_C*conc_C
-        #     dBdt = dBdt - react_AB*conc_A**2*conc_B + react_C*conc_C
-        #     dCdt = dCdt + react_AB*conc_A**2*conc_B - react_C*conc_C
+            raise ValueError("Reaction order not recognized.")
+
         return [dAdt, dBdt, dCdt]
 
 
@@ -421,7 +400,7 @@ if __name__ == "__main__":
                         help='Select a pre-designed simulation type to run')
     parser.add_argument('--run_name', type=str, default=["test"],
                         help='Enter a base prefix run name for the saved simulation directory.')
-    parser.add_argument('--iterations', type=int, default=50,
+    parser.add_argument('--iterations', type=int, default=200,
                         help='Enter the number of iterations for which to run the simulation.')
 
     parser.add_argument('--feed', type=float, default=0.0362,
@@ -431,7 +410,7 @@ if __name__ == "__main__":
     parser.add_argument('--length', type=int, default=50,
                         help='Simulation dimension.')
 
-    parser.add_argument('--updates_per_frame', type=int, default=25,
+    parser.add_argument('--updates_per_frame', type=int, default=50,
                         help='Number of updates of simulation to perform for each frame of the animation.')
     parser.add_argument('--visual', type=bool,
                         help='Whether or not to visualize the simulation real-time.')
@@ -447,7 +426,7 @@ if __name__ == "__main__":
                          init="pointMass")
     elif args.type[0] == "3ParticlesFirstOrder":
         sim = Simulation(n=3, orders=[1, 1, 1], diffusions=[1, 1, 0.5], activationEnergies=[4, 4], temp=350, length=args.length,
-                         init="even", startingConcs=[0.5, 0.25, 0])
+                         init="pointMass", startingConcs=[0.5, 0.25, 0])
     elif args.type[0] == "3ParticlesSecondOrder":
         sim = Simulation(n=3, orders=[2, 2, 2], diffusions=[1, 1, 0.5], activationEnergies=[3, 3], temp=298, length=args.length,
                          init="even", startingConcs=[0.5, 0.25, 0])
@@ -466,3 +445,6 @@ if __name__ == "__main__":
     # Run the selected simulation and save to the results to simulations\[<input name>]-[<params>]
     sim.run(iterations=args.iterations, run_name=args.run_name, updates_per_frame=args.updates_per_frame,
             visual=args.visual)
+
+    video_path = glob.glob(os.path.join(sim.output_path, '*.avi'))[0]
+    open_file(video_path)
