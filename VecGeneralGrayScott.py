@@ -223,7 +223,10 @@ class Simulation(object):
                                       interval=50, blit=True, repeat_delay=1000)
 
         if visual:
-            plt.show()
+            try:
+                plt.show()
+            except KeyboardInterrupt:
+                pass
 
         ani.save(run_name + "-video.avi")
         plt.close()
