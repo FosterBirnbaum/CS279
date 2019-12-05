@@ -12,11 +12,9 @@ Written by Collin Schlager (schlager@stanford.edu) and Foster Birnbaum (fosb@sta
 The backbone of the particle class was written by instructors of CS279 in Fall 2019
 """
 
-from numpy import zeros
-from numpy import random
 from tqdm import tqdm
 from matplotlib import pyplot as plt
-import os, sys, subprocess
+import subprocess
 import numpy as np
 from scipy import ndimage
 import scipy.stats as stats
@@ -27,22 +25,8 @@ import logging
 import shutil
 import argparse
 import matplotlib.animation as animation
-from matplotlib.animation import FFMpegWriter
-
-
+import config
 np.set_printoptions(precision=2)
-
-# Constant Parameters
-OUTPUT_FOLDER = "simulations"
-DEFAULT_INIT = "random"
-DEFAULT_LAPLACE_MATRIX = np.array([[0.05, 0.2, 0.05],
-                                   [0.2, -1.0, 0.2],
-                                   [0.05, 0.2, 0.05]], np.float64)
-RESTRICTED_LAPLACE_MATRIX = np.array([[0.3, 0.08, 0.04],
-                                      [0.08, -1.0, 0.08],
-                                      [0.04, 0.08, 0.3]], np.float64)
-DEFAULT_TEMP_LOWERBOUND = 273
-DEFAULT_TEMP_UPPERBOUND = 473
 
 """
 Defines the particle class that contains information on a specific particle in the simulation.
@@ -71,9 +55,8 @@ to user input parameters. For a list of sample input parameters, please see top 
 """
 class Simulation(object):
     def __init__(self, n=2, orders=[-1, -1], diffusions=[1, 1], feed=0.0545, kill=0.03, activationEnergies=[1, 1],
-                 temp=298,
-                 length=100, maxConc=3, startingConcs=[0.25, 0.25, 0], laplace_matrix=DEFAULT_LAPLACE_MATRIX,
-                 init=DEFAULT_INIT):
+                 temp=298, length=100, maxConc=3, startingConcs=config.STARTING_CONCS,
+                 laplace_matrix=config.DEFAULT_LAPLACE_MATRIX, init=config.DEFAULT_INIT):
         """
         Object to simulate Gray-Scott diffusion with n particles.
         :param n: number of particles
@@ -147,7 +130,7 @@ class Simulation(object):
             for particle in range(self.numParticles - 1):
                 for i in range(self.length):
                     for j in range(self.length):
-                        self.particleList[particle].blocks[i, j] = random.normal(self.startingConcs[particle], 0.5)
+                        self.particleList[particle].blocks[i, j] = np.random.normal(self.startingConcs[particle], 0.5)
         # If user wants point mass, put first particle to 1 everywhere and second particle to 0 everywhere except a small region in center
         elif self.init == "pointMass":
             for i in range(self.length):
@@ -169,11 +152,9 @@ class Simulation(object):
         """
 
         # Create and go to output directory
-        output_dir_name = "{}_iterations-{}_length-{}_init-{}_starting-{}_kill-{}_feed-{}_iterations_{}".\
-            format(run_name, iterations, self.length, self.init, self.startingConcs[0],
-                   self.kill, self.feed, iterations)
+        output_dir_name = run_name
 
-        output_path = os.path.join(OUTPUT_FOLDER, output_dir_name)
+        output_path = os.path.join(config.OUTPUT_FOLDER, output_dir_name)
         self.output_path = output_path
 
         if run_name == "test":
@@ -208,7 +189,6 @@ class Simulation(object):
 
         # Start creating video
         metadata = dict(title='Movie Test', artist='Matplotlib', comment='Movie support!')
-        writer = FFMpegWriter(fps=15, metadata=metadata)
         fig = plt.figure()
 
         # Create numpy arrays to track total concentrations of all particles and rate
@@ -305,7 +285,7 @@ class Simulation(object):
                 else:
                     #If user specific restricted cellular, use the restricted laplacian matrices
                     if "restricted" in self.init:
-                        self.laplacians[particle,:,:] = ndimage.convolve(curGrid, RESTRICTED_LAPLACE_MATRIX,  mode='wrap')
+                        self.laplacians[particle,:,:] = ndimage.convolve(curGrid, config.RESTRICTED_LAPLACE_MATRIX,  mode='wrap')
                     else:
                         self.laplacians[particle,:,:] = ndimage.convolve(curGrid, self.laplace_matrix, mode='wrap')
             else:
@@ -316,8 +296,8 @@ class Simulation(object):
         Compute the energy of the system according to the maxwell-boltzmann distribution
         :return: energy sampled from appropriate maxwell-boltzmann distribution
         """
-        scale = 10 * ((self.temp - DEFAULT_TEMP_LOWERBOUND) /
-                      (DEFAULT_TEMP_UPPERBOUND - DEFAULT_TEMP_LOWERBOUND))
+        scale = 10 * ((self.temp - config.DEFAULT_TEMP_LOWERBOUND) /
+                      (config.DEFAULT_TEMP_UPPERBOUND - config.DEFAULT_TEMP_LOWERBOUND))
         energy = stats.maxwell.rvs(loc=0, scale=scale, size=self.length**2)
         energy = energy.reshape(self.length, self.length)
         return energy
@@ -439,7 +419,7 @@ if __name__ == "__main__":
     elif args.type[0] == "CellularOpen":
         sim = Simulation(n=3, orders=[1,1,1], diffusions = [1, 1, 0.5], activationEnergies = [3, 3], temp = 350, length=args.length, init="cellular-open", startingConcs=[0.5, 1, 0])
     elif args.type[0] == "CellularRestricted":
-        sim = Simulation(n=3, orders=[1,1,1], diffusions = [1, 1, 0.5], activationEnergies = [3, 3], temp = 350, length=args.length, init="cellular-restricted", startingConcs=[0.5, 1, 0], laplace_matrix=RESTRICTED_LAPLACE_MATRIX)
+        sim = Simulation(n=3, orders=[1,1,1], diffusions = [1, 1, 0.5], activationEnergies = [3, 3], temp = 350, length=args.length, init="cellular-restricted", startingConcs=[0.5, 1, 0], laplace_matrix=config.RESTRICTED_LAPLACE_MATRIX)
     else:
         # argparse should handle this, but just in case
         sim = None
