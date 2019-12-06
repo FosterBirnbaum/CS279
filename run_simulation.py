@@ -61,7 +61,6 @@ def main(args):
     sim_params["updates_per_frame"] = args.updates_per_frame if \
         args.updates_per_frame is not None else sim_params["updates_per_frame"]
 
-
     # Create simulation object using parameters defined above
     sim = Simulation(**sim_params)
 

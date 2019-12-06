@@ -56,9 +56,12 @@ to user input parameters. For a list of sample input parameters, please see top 
 """
 class Simulation(object):
     def __init__(self, n=2, order=-1, diffusions=[1, 1], feed=0.0545, kill=0.03, activationEnergies=[1, 1],
-                 temp=298, length=100, maxConc=3, startingConcs=config.STARTING_CONCS,
+                 temp=298, length=200, maxConc=3, startingConcs=config.STARTING_CONCS,
                  laplace_matrix=config.DEFAULT_LAPLACE_MATRIX, init=config.DEFAULT_INIT,
                  normalize_values=True, updates_per_frame=1):
+
+        # print(locals())
+        # return
 
         # Class parameters
         self.numParticles = n
@@ -232,13 +235,13 @@ class Simulation(object):
         if (frame > 0):
             self.rate[frame-1] = self.particleConcentrations[frame, -1] - self.particleConcentrations[frame - 1, -1]
 
-        # if self.normalize_values:
-        #     max_val = np.max(self.particleList[1].blocks)
-        #     min_val = np.min(self.particleList[1].blocks)
-        #     im_data = (self.particleList[1].blocks - min_val) / (max_val - min_val)
-        # else:
-        #     im_data = self.particleList[1].blocks
-        im_data = self.particleList[1].blocks
+        if self.normalize_values:
+            max_val = np.max(self.particleList[1].blocks)
+            min_val = np.min(self.particleList[1].blocks)
+            im_data = (self.particleList[1].blocks - min_val) / (max_val - min_val)
+        else:
+            im_data = self.particleList[1].blocks
+        # im_data = self.particleList[1].blocks
 
         self.im.set_array(im_data)
         """
@@ -365,7 +368,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run a Gray-Scott diffusion simulation model.')
     parser.add_argument('--feed', type=float, default=0.0362, help='Feed rate.')
     parser.add_argument('--kill', type=float, default=0.062, help='Kill rate.')
-    parser.add_argument('--length', type=int, default=50, help='Simulation dimension.')
+    parser.add_argument('--length', type=int, default=200, help='Simulation dimension.')
     parser.add_argument('--visual', dest='visual', action='store_true',
                         help='Whether or not to visualize the simulation real-time.')
     parser.set_defaults(visual=False)
@@ -374,7 +377,7 @@ if __name__ == "__main__":
     sim = Simulation(n=2, order=-1, diffusions=[1, 0.5], feed=args.feed, kill=args.kill, length=args.length,
                      init="pointMass", updates_per_frame=25)
 
-    sim.run(iterations=args.iterations, run_name="test", visual=args.visual)
+    sim.run(iterations=200, run_name="test", visual=args.visual)
 
     # Open the video after it is compiled
     video_path = glob.glob(os.path.join(sim.output_path, '*.avi'))[0]
