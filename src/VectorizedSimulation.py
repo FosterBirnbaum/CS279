@@ -26,7 +26,7 @@ import logging
 import shutil
 import argparse
 import matplotlib.animation as animation
-import config
+import src.config as config
 np.set_printoptions(precision=2)
 
 """
@@ -179,6 +179,7 @@ class Simulation(object):
 
         # Start creating video
         fig = plt.figure()
+        plt.axis('off')
 
         # Create numpy arrays to track total concentrations of all particles and rate
         # or product formation and figures to display concentrations and rate

@@ -24,9 +24,9 @@ Notes:
     and not cumbersome.
 """
 
-from VectorizedSimulation import Simulation, open_file
-import preset_simulations as preset 
-import config
+from src.VectorizedSimulation import Simulation, open_file
+import src.preset_simulations as preset
+import src.config as config
 import argparse
 import glob
 import os
@@ -98,7 +98,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--iterations', type=int, default=200,
                         help='Enter the number of iterations for which to run the simulation.')
-    parser.add_argument('--length', type=int, default=200, help='Simulation dimension.')
+    parser.add_argument('--length', type=int, help='Simulation dimension.')
     parser.add_argument('--visual', dest='visual', action='store_true',
                         help='Whether or not to visualize the simulation real-time.')
     parser.set_defaults(visual=False)

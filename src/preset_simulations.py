@@ -1,4 +1,4 @@
-import config
+from src import config
 
 #########################################
 #       Gray-Scott Simulations          #
@@ -10,12 +10,13 @@ base_gray_scott = {
     'feed' : None,
     'kill' : None,
     'temp' : None,
+    'length' : 200,
     'init' : "pointMass",
     'activationEnergies' : None,
     'startingConcs' : [0.25, 0.25, 0],
     'laplace_matrix' : config.DEFAULT_LAPLACE_MATRIX,
     'normalize_values' : True,
-    'updates_per_frame' : 25,
+    'updates_per_frame' : 100,
 }
 
 default = {
@@ -51,6 +52,7 @@ first_order = {
     'feed' : None,
     'kill' : None,
     'temp' : 350,
+    'length' : 200,
     'init' : "even",
     'activationEnergies' : [4, 4],
     'startingConcs' : [0.5, 0.25, 0],
@@ -66,6 +68,7 @@ second_order = {
     'feed': None,
     'kill': None,
     'temp': 298,
+    'length': 200,
     'init': "even",
     'activationEnergies': [3, 3],
     'startingConcs': [0.5, 0.25, 0],

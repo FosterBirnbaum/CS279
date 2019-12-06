@@ -2,11 +2,14 @@
 
 ### General Project Structure
 ```
-├── SimpleGrayScott.py
-├── [...] <other simulation code>
+├── VectorizedSimulation.py
+├── run_simulation.py
+├── preset_simulations.py
+├── config.py
 ├── requirements.txt
 └── simulations
-    ├── simple_iterations-100_length-100_feed-0.0545_kill-0.03
+    ├── example_1
+    ├── example_2
     └── [...] <other simulation results>
 ```
 
