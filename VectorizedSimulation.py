@@ -55,13 +55,13 @@ Defines the Simulation object that runs a reaction-diffusion simulation accordin
 to user input parameters. For a list of sample input parameters, please see top of file comment.
 """
 class Simulation(object):
-    def __init__(self, n=2, orders=[-1, -1], diffusions=[1, 1], feed=0.0545, kill=0.03, activationEnergies=[1, 1],
+    def __init__(self, n=2, order=-1, diffusions=[1, 1], feed=0.0545, kill=0.03, activationEnergies=[1, 1],
                  temp=298, length=100, maxConc=3, startingConcs=config.STARTING_CONCS,
                  laplace_matrix=config.DEFAULT_LAPLACE_MATRIX, init=config.DEFAULT_INIT):
 
         # Class parameters
         self.numParticles = n
-        self.orders = orders
+        self.order = order
         self.length = length
         self.maxConc = maxConc
         self.startingConcs = startingConcs
@@ -307,7 +307,7 @@ class Simulation(object):
         lapB = self.laplacians[1, :, :]
         lapC = self.laplacians[2, :, :] if self.numParticles > 2 else 0
 
-        if (self.orders[0] == -1):
+        if (self.order == -1):
 
             dAdt = self.particleList[0].diffusion * lapA \
                    - conc_A * np.square(conc_B) \
@@ -319,7 +319,7 @@ class Simulation(object):
 
             dCdt = 0
 
-        elif(self.orders[0] == 1):
+        elif(self.order == 1):
 
             # masks for reactions happening
             curEnergy = self.compute_maxwell()
@@ -336,7 +336,7 @@ class Simulation(object):
             dBdt = dBdt - react_AB*conc_A*conc_B + react_C*conc_C
             dCdt = dCdt + react_AB*conc_A*conc_B - react_C*conc_C
 
-        elif(self.orders[0] == 2):
+        elif(self.order == 2):
 
             curEnergy = self.compute_maxwell()
             react_AB = curEnergy > self.activationEnergies[0]
@@ -370,7 +370,7 @@ if __name__ == "__main__":
     parser.set_defaults(visual=False)
     args = parser.parse_args()
 
-    sim = Simulation(n=2, orders=[-1, -1], diffusions=[1, 0.5], feed=args.feed, kill=args.kill, length=args.length,
+    sim = Simulation(n=2, order=-1, diffusions=[1, 0.5], feed=args.feed, kill=args.kill, length=args.length,
                      init="pointMass")
 
     sim.run(iterations=args.iterations, run_name="test", updates_per_frame=25,

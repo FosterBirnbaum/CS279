@@ -39,7 +39,7 @@ def main(args):
     # Standard two-particle Gray-Scott model
     if args.type[0] == "standard":
         n = 2
-        orders = [-1, -1]
+        order = -1
         diffusions = [1, 0.5]
         feed = 0.0362
         kill = 0.062
@@ -55,7 +55,7 @@ def main(args):
     # A + B --> C
     elif args.type[0] == "three_particles_first_order":
         n = 3
-        orders = [1, 1, 1]
+        order = 1
         diffusions = [1, 1, 0.5]
         feed = None
         kill = None
@@ -71,7 +71,7 @@ def main(args):
     # 2A + B --> C
     elif args.type[0] == "three_particles_second_order":
         n = 3
-        orders = [2, 2, 2]
+        order = 2
         diffusions = [1, 1, 0.5]
         feed = None
         kill = None
@@ -87,7 +87,7 @@ def main(args):
     # 2A + B --> C
     elif args.type[0] == "cellular_open":
         n = 3
-        orders = [1, 1, 1]
+        order = 1
         diffusions = [1, 1, 0.5]
         feed = None
         kill = None
@@ -101,7 +101,7 @@ def main(args):
 
     elif args.type[0] == "cellular_restricted":
         n = 3
-        orders = [1, 1, 1]
+        order = 1
         diffusions = [1, 1, 0.5]
         feed = None
         kill = None
@@ -126,7 +126,7 @@ def main(args):
 
 
     # Create simulation object using parameters defined above
-    sim = Simulation(n=n, orders=orders, diffusions=diffusions, feed=feed, kill=kill, length=args.length,
+    sim = Simulation(n=n, order=order, diffusions=diffusions, feed=feed, kill=kill, length=args.length,
                      init=init, activationEnergies=activationEnergies, startingConcs=startingConcs,
                      laplace_matrix=laplace_matrix, temp=temp)
 
