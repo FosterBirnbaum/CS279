@@ -91,7 +91,8 @@ class Simulation(object):
         # If user wants even intialization, put first two particles to starting concentration everywhere
         if self.init == "even":
             for particle in range(self.numParticles - 1):
-                self.particleList[particle].blocks = self.startingConcs[particle]
+                self.particleList[particle].blocks = self.startingConcs[particle]*np.ones((self.length, self.length), dtype="float")
+
 
         # If user wants seperated initialization, put first particle to starting concentration on one half
         # and second to starting concentration on other half (with small gap in between)
@@ -235,10 +236,12 @@ class Simulation(object):
         if self.normalize_values:
             max_val = np.max(self.particleList[1].blocks)
             min_val = np.min(self.particleList[1].blocks)
-            im_data = (self.particleList[1].blocks - min_val) / (max_val - min_val)
+            if np.isclose(max_val, min_val):
+                im_data = np.zeros(self.particleList[1].blocks.size).reshape(self.length, self.length)
+            else:
+                im_data = (self.particleList[1].blocks - min_val) / (max_val - min_val)
         else:
             im_data = self.particleList[1].blocks
-        # im_data = self.particleList[1].blocks
 
         self.im.set_array(im_data)
         """
@@ -284,6 +287,11 @@ class Simulation(object):
                         self.laplacians[particle,:,:] = ndimage.convolve(curGrid, self.laplace_matrix, mode='wrap')
             else:
                 self.laplacians[particle, :, :] = ndimage.convolve(curGrid, self.laplace_matrix, mode='wrap')
+
+            # Values too close to zero are set to zero
+            # self.particleList[particle].blocks = self.particleList[particle].blocks.round(decimals=200)
+
+
 
     def compute_maxwell(self):
         """
