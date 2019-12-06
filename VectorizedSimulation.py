@@ -232,12 +232,13 @@ class Simulation(object):
         if (frame > 0):
             self.rate[frame-1] = self.particleConcentrations[frame, -1] - self.particleConcentrations[frame - 1, -1]
 
-        if self.normalize_values:
-            max_val = np.max(self.particleList[1].blocks)
-            min_val = np.min(self.particleList[1].blocks)
-            im_data = (self.particleList[1].blocks - min_val) / (max_val - min_val)
-        else:
-            im_data = self.particleList[1].blocks
+        # if self.normalize_values:
+        #     max_val = np.max(self.particleList[1].blocks)
+        #     min_val = np.min(self.particleList[1].blocks)
+        #     im_data = (self.particleList[1].blocks - min_val) / (max_val - min_val)
+        # else:
+        #     im_data = self.particleList[1].blocks
+        im_data = self.particleList[1].blocks
 
         self.im.set_array(im_data)
         """

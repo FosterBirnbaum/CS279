@@ -42,8 +42,6 @@ def main(args):
         sim_params = preset.get_gray_scott_config(preset.default)
     elif args.type[0] == "dots":
         sim_params = preset.get_gray_scott_config(preset.dots)
-    elif args.type[0] == "waves":
-        sim_params = preset.get_gray_scott_config(preset.waves)
     elif args.type[0] == "first_order":
         sim_params = preset.first_order
     elif args.type[0] == "second_order":

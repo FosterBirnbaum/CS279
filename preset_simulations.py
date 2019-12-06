@@ -23,6 +23,11 @@ default = {
     'kill' : 0.062
 }
 
+dots = {
+    'feed' : 0.03,
+    'kill' : 0.062
+}
+
 circles = {
     'feed' : 0.03,
     'kill' : 0.0545
