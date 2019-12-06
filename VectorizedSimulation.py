@@ -57,7 +57,8 @@ to user input parameters. For a list of sample input parameters, please see top 
 class Simulation(object):
     def __init__(self, n=2, order=-1, diffusions=[1, 1], feed=0.0545, kill=0.03, activationEnergies=[1, 1],
                  temp=298, length=100, maxConc=3, startingConcs=config.STARTING_CONCS,
-                 laplace_matrix=config.DEFAULT_LAPLACE_MATRIX, init=config.DEFAULT_INIT):
+                 laplace_matrix=config.DEFAULT_LAPLACE_MATRIX, init=config.DEFAULT_INIT,
+                 normalize_values=True, updates_per_frame=1):
 
         # Class parameters
         self.numParticles = n
@@ -72,7 +73,8 @@ class Simulation(object):
         self.laplace_matrix = laplace_matrix
         self.laplacians = np.zeros((n, length, length), np.float64)
         self.init = init
-        self.normalize_values = False  # set in .run()
+        self.normalize_values = normalize_values
+        self.updates_per_frame = updates_per_frame
 
         # Init particles
         self.particleList = []
@@ -85,15 +87,14 @@ class Simulation(object):
     def set_initial_state(self):
         """
         Sets the initial state of the particle objects for the simulation.
-        TODO: make this more dynamic
         """
         # If user wants even intialization, put first two particles to starting concentration everywhere
         if self.init == "even":
             for particle in range(self.numParticles - 1):
-                for i in range(self.length):
-                    for j in range(self.length):
-                        self.particleList[particle].blocks[i, j] = self.startingConcs[particle]
-        # If user wants seperated initialization, put first particle to starting concentration on one half and second to starting concentration on other half (with small gap in between)
+                self.particleList[particle].blocks = self.startingConcs[particle]
+
+        # If user wants seperated initialization, put first particle to starting concentration on one half
+        # and second to starting concentration on other half (with small gap in between)
         elif self.init == "seperated":
             for i in range(self.length):
                 for j in range(self.length):
@@ -101,8 +102,9 @@ class Simulation(object):
                         self.particleList[0].blocks[i, j] = self.startingConcs[0]
                     elif (i > self.length * 0.5 + self.length * 0.05):
                         self.particleList[1].blocks[i, j] = self.startingConcs[1]
-        # If user wants cellular initialization, establish a region in the center with first particle present and from which it cannot diffuse out of, and set
-        # second particle to a very high concentration elsewhere in the grid
+        # If user wants cellular initialization, establish a region in the center with first particle present
+        # and from which it cannot diffuse out of, and set second particle to a very high concentration
+        # elsewhere in the grid
         elif "cellular" in self.init:
             for i in range(self.length):
                 for j in range(self.length):
@@ -111,13 +113,16 @@ class Simulation(object):
                         self.particleList[0].blocks[i, j] = self.startingConcs[0]
                     elif (i < self.length * 0.1) and (j < self.length * 0.1):
                         self.particleList[1].blocks[i, j] = self.startingConcs[1]
-        # If user wants random intialization, randomly assign (with mean of starting concentration) concentration of first two particled everywhere
+
+        # If user wants random intialization, randomly assign (with mean of starting concentration)
+        # concentration of first two particled everywhere
         elif self.init == "random":
             for particle in range(self.numParticles - 1):
-                for i in range(self.length):
-                    for j in range(self.length):
-                        self.particleList[particle].blocks[i, j] = np.random.normal(self.startingConcs[particle], 0.5)
-        # If user wants point mass, put first particle to 1 everywhere and second particle to 0 everywhere except a small region in center
+                self.particleList[particle].blocks = np.random.normal(self.startingConcs[particle], 0.5,
+                                                                      size=(self.length, self.length))
+
+        # If user wants point mass, put first particle to 1 everywhere and second particle to 0
+        # everywhere except a small region in center
         elif self.init == "pointMass":
             for i in range(self.length):
                 for j in range(self.length):
@@ -128,7 +133,7 @@ class Simulation(object):
                     else:
                         self.particleList[1].blocks[i, j] = 0
 
-    def run(self, iterations, run_name="simple", updates_per_frame=25, visual=False, normalize_values=False):
+    def run(self, iterations, run_name="simple", visual=False):
         """
         Runs the simulation and stores frames to a result directory in `simulatons/`
         :param iterations: number of iterations to run the simulation for
@@ -139,8 +144,6 @@ class Simulation(object):
 
         # Create and go to output directory
         output_dir_name = run_name
-
-        self.normalize_values = normalize_values
 
         output_path = os.path.join(config.OUTPUT_FOLDER, output_dir_name)
         self.output_path = output_path
@@ -159,12 +162,12 @@ class Simulation(object):
             os.chdir(output_path)
 
         # Run the proper simulation
-        self.run_matplotlib(iterations, run_name, updates_per_frame=updates_per_frame, visual=visual)
+        self.run_matplotlib(iterations, run_name, visual=visual)
 
         # Change back to the original directory
         os.chdir(cur_dir)
 
-    def run_matplotlib(self, iterations, run_name, updates_per_frame=25, visual=False):
+    def run_matplotlib(self, iterations, run_name, visual=False):
         """
         Use matplotlib as graphics library to create a video of the simulation.
         :param iterations: Number of iterations for simulation
@@ -173,10 +176,7 @@ class Simulation(object):
         :return: None
         """
 
-        self.updates_per_frame = updates_per_frame
-
         # Start creating video
-        metadata = dict(title='Movie Test', artist='Matplotlib', comment='Movie support!')
         fig = plt.figure()
 
         # Create numpy arrays to track total concentrations of all particles and rate
@@ -371,10 +371,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     sim = Simulation(n=2, order=-1, diffusions=[1, 0.5], feed=args.feed, kill=args.kill, length=args.length,
-                     init="pointMass")
+                     init="pointMass", updates_per_frame=25)
 
-    sim.run(iterations=args.iterations, run_name="test", updates_per_frame=25,
-            visual=args.visual)
+    sim.run(iterations=args.iterations, run_name="test", visual=args.visual)
 
     # Open the video after it is compiled
     video_path = glob.glob(os.path.join(sim.output_path, '*.avi'))[0]

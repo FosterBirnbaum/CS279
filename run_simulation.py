@@ -25,6 +25,7 @@ Notes:
 """
 
 from VectorizedSimulation import Simulation, open_file
+import preset_simulations as preset 
 import config
 import argparse
 import glob
@@ -37,102 +38,37 @@ def main(args):
     # =======================================
 
     # Standard two-particle Gray-Scott model
-    if args.type[0] == "standard":
-        n = 2
-        order = -1
-        diffusions = [1, 0.5]
-        feed = 0.0362
-        kill = 0.062
-        temp = None
-        init = "pointMass"
-        activationEnergies = None
-        startingConcs = [0.25, 0.25, 0]
-        laplace_matrix = config.DEFAULT_LAPLACE_MATRIX
-        normalize_values = True
-        updates_per_frame = 100
-
-    # Three particle reactions controlled by first-order kinetics
-    # A + B --> C
-    elif args.type[0] == "three_particles_first_order":
-        n = 3
-        order = 1
-        diffusions = [1, 1, 0.5]
-        feed = None
-        kill = None
-        activationEnergies = [4, 4]
-        temp = 350
-        init = "even"
-        startingConcs = [0.5, 0.25, 0]
-        laplace_matrix = config.DEFAULT_LAPLACE_MATRIX
-        normalize_values = True
-        updates_per_frame = 1
-
-    # Three particle reactions controlled by second-order kinetics
-    # 2A + B --> C
-    elif args.type[0] == "three_particles_second_order":
-        n = 3
-        order = 2
-        diffusions = [1, 1, 0.5]
-        feed = None
-        kill = None
-        activationEnergies = [3, 3]
-        temp = 298
-        init = "even"
-        startingConcs = [0.5, 0.25, 0]
-        laplace_matrix = config.DEFAULT_LAPLACE_MATRIX
-        normalize_values = True
-        updates_per_frame = 1
-
-    # Normal diffusion about a cell for three-particle
-    # 2A + B --> C
+    if args.type[0] == "gray_scott":
+        sim_params = preset.get_gray_scott_config(preset.default)
+    elif args.type[0] == "dots":
+        sim_params = preset.get_gray_scott_config(preset.dots)
+    elif args.type[0] == "waves":
+        sim_params = preset.get_gray_scott_config(preset.waves)
+    elif args.type[0] == "first_order":
+        sim_params = preset.first_order
+    elif args.type[0] == "second_order":
+        sim_params = preset.second_order
     elif args.type[0] == "cellular_open":
-        n = 3
-        order = 1
-        diffusions = [1, 1, 0.5]
-        feed = None
-        kill = None
-        activationEnergies = [3, 3]
-        temp = 350
-        init = "cellular-open"
-        startingConcs = [0.5, 1, 0]
-        laplace_matrix = config.DEFAULT_LAPLACE_MATRIX
-        normalize_values = True
-        updates_per_frame = 1
-
+        sim_params = preset.cellular_open
     elif args.type[0] == "cellular_restricted":
-        n = 3
-        order = 1
-        diffusions = [1, 1, 0.5]
-        feed = None
-        kill = None
-        activationEnergies = [3, 3]
-        temp = 350
-        length = 50
-        init = "cellular-restricted"
-        startingConcs = [0.5, 1, 0]
-        laplace_matrix = config.RESTRICTED_LAPLACE_MATRIX
-        normalize_values = True
-        updates_per_frame = 1
-
+        sim_params = preset.cellular_restricted
     else:
         raise Exception("Unrecognized simulation type. %r" % args.type[0])
 
     # =======================================
     # || Manual Over-ride of parameters    ||
     # =======================================
-    feed = args.feed if args.feed is not None else feed
-    kill = args.kill if args.kill is not None else kill
-    updates_per_frame = args.updates_per_frame if args.updates_per_frame is not None else updates_per_frame
+    sim_params["feed"] = args.feed if args.feed is not None else sim_params["feed"]
+    sim_params["kill"] = args.kill if args.kill is not None else sim_params["kill"]
+    sim_params["updates_per_frame"] = args.updates_per_frame if \
+        args.updates_per_frame is not None else sim_params["updates_per_frame"]
 
 
     # Create simulation object using parameters defined above
-    sim = Simulation(n=n, order=order, diffusions=diffusions, feed=feed, kill=kill, length=args.length,
-                     init=init, activationEnergies=activationEnergies, startingConcs=startingConcs,
-                     laplace_matrix=laplace_matrix, temp=temp)
+    sim = Simulation(**sim_params)
 
     # Run the selected simulation and save to the results to simulations\[<input name>]-[<params>]
-    sim.run(iterations=args.iterations, run_name=args.run_name, updates_per_frame=updates_per_frame,
-            visual=args.visual, normalize_values=normalize_values)
+    sim.run(iterations=args.iterations, run_name=args.run_name, visual=args.visual)
 
     # Run the simulation video after compilation
     video_path = glob.glob(os.path.join(sim.output_path, '*.avi'))[0]
@@ -142,15 +78,21 @@ def main(args):
 if __name__ == "__main__":
 
     # Get user input via command-line arguments
-    parser = argparse.ArgumentParser(description='Run a modified Gray-Scott diffusion simulation model.')
+    parser = argparse.ArgumentParser(description='Run a diffusion simulation model.')
 
     parser.add_argument('--type', type=str, nargs=1,
-                        choices=["standard", "three_particles_first_order",
-                                 "three_particles_second_order", "cellular_open", "cellular_restricted"],
-                        default=["two_particles"],
+                        choices=["gray_scott",
+                                 "dots",
+                                 "waves",
+                                 "first_order",
+                                 "second_order",
+                                 "cellular_open",
+                                 "cellular_restricted"],
+                        default=["gray_scott"],
                         help='Select a pre-designed simulation type to run')
     parser.add_argument('--run_name', type=str, default="test",
                         help='Enter a base prefix run name for the saved simulation directory.')
+
     parser.add_argument('--iterations', type=int, default=200,
                         help='Enter the number of iterations for which to run the simulation.')
     parser.add_argument('--length', type=int, default=200, help='Simulation dimension.')
