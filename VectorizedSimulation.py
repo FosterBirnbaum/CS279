@@ -17,6 +17,7 @@ from matplotlib import pyplot as plt
 import subprocess
 import numpy as np
 from scipy import ndimage
+import sklearn.preprocessing as sk
 import scipy.stats as stats
 import os
 import glob
@@ -57,22 +58,6 @@ class Simulation(object):
     def __init__(self, n=2, orders=[-1, -1], diffusions=[1, 1], feed=0.0545, kill=0.03, activationEnergies=[1, 1],
                  temp=298, length=100, maxConc=3, startingConcs=config.STARTING_CONCS,
                  laplace_matrix=config.DEFAULT_LAPLACE_MATRIX, init=config.DEFAULT_INIT):
-        """
-        Object to simulate Gray-Scott diffusion with n particles.
-        :param n: number of particles
-        :param orders: array of reaction orders for each substrate molecule
-                       if the order is -1, the default Gray-Scott equation is used instead of an equation based on reaction kinetics
-        :param diffusions: array of diffusion constants for each molecule
-        :param feed: feed rate
-        :param kill: kill rate
-        :param activationEnergies: barriers to the reaction occuring
-        :param temp: temperature at which the reaction occurs
-        :param length: side-length of simulation square
-        :param maxConc: max concentration
-        :param laplace_matrix: 3x3 convolution matrix
-        :param intit: string identifying how grid should be initialized
-        :return None
-        """
 
         # Class parameters
         self.numParticles = n
@@ -87,6 +72,7 @@ class Simulation(object):
         self.laplace_matrix = laplace_matrix
         self.laplacians = np.zeros((n, length, length), np.float64)
         self.init = init
+        self.normalize_values = False  # set in .run()
 
         # Init particles
         self.particleList = []
@@ -142,7 +128,7 @@ class Simulation(object):
                     else:
                         self.particleList[1].blocks[i, j] = 0
 
-    def run(self, iterations, run_name="simple", updates_per_frame=25, visual=False):
+    def run(self, iterations, run_name="simple", updates_per_frame=25, visual=False, normalize_values=False):
         """
         Runs the simulation and stores frames to a result directory in `simulatons/`
         :param iterations: number of iterations to run the simulation for
@@ -153,6 +139,8 @@ class Simulation(object):
 
         # Create and go to output directory
         output_dir_name = run_name
+
+        self.normalize_values = normalize_values
 
         output_path = os.path.join(config.OUTPUT_FOLDER, output_dir_name)
         self.output_path = output_path
@@ -199,7 +187,7 @@ class Simulation(object):
         self.rateTimesteps = np.arange(1, iterations)
 
         a = np.zeros((self.length, self.length))
-        self.im = plt.imshow(a, interpolation='none', aspect='auto', animated=True, vmin=0, vmax=0.5)
+        self.im = plt.imshow(a, interpolation='none', aspect='auto', animated=True, vmin=0, vmax=1)
 
         ani = animation.FuncAnimation(fig, self.get_frame, tqdm(range(iterations)),
                                       interval=50, blit=True, repeat_delay=1000)
@@ -244,11 +232,20 @@ class Simulation(object):
         if (frame > 0):
             self.rate[frame-1] = self.particleConcentrations[frame, -1] - self.particleConcentrations[frame - 1, -1]
 
-        self.im.set_array(self.particleList[1].blocks)
-        # plt.figure()
-        # self.im = plt.imshow(self.particleList[1].blocks)
-        # plt.savefig(str(frame) + '.png')
-        # plt.close()
+        if self.normalize_values:
+            max_val = np.max(self.particleList[1].blocks)
+            min_val = np.min(self.particleList[1].blocks)
+            im_data = (self.particleList[1].blocks - min_val) / (max_val - min_val)
+        else:
+            im_data = self.particleList[1].blocks
+
+        self.im.set_array(im_data)
+        """
+        plt.figure()
+        im = plt.imshow(self.particleList[1].blocks)
+        plt.savefig(str(frame) + '.png')
+        plt.close()
+        """
         return [self.im]
 
     def update(self):
@@ -259,10 +256,6 @@ class Simulation(object):
         concentrationUpdates = self.get_particle_derivatives()
         for particle in range(self.numParticles):
             self.particleList[particle].blocks += concentrationUpdates[particle]
-            # Ensure no values are above max or below min
-            # (this shouldn't be an issue if update parameters are set appropriately)
-            # np.where(self.particleList[particle].blocks>1, self.particleList[particle].blocks, 1)
-            # np.where(self.particleList[particle].blocks<0, self.particleList[particle].blocks, 0)
 
     def compute_laplacians(self):
         """
@@ -303,17 +296,6 @@ class Simulation(object):
         return energy
 
     def get_particle_derivatives(self):
-        """
-        Compute the change in all particles at a particular location (i, j). Returned equation is defined by
-        value stored in orders array:
-            -1: Gray-Scott
-             0: Zero Order
-             1: First Order
-             2: Second Order
-        :param i: x location to update
-        :param j: y location to update
-        :return: dParticledt evaluated at (i, j) for input particle
-        """
 
         self.compute_laplacians()
 
@@ -328,11 +310,11 @@ class Simulation(object):
         if (self.orders[0] == -1):
 
             dAdt = self.particleList[0].diffusion * lapA \
-                   - np.multiply(conc_A, np.square(conc_B)) \
+                   - conc_A * np.square(conc_B) \
                    + self.feed * (1 - conc_A)
 
             dBdt = self.particleList[1].diffusion * lapB \
-                   + np.multiply(conc_A, np.square(conc_B)) \
+                   + conc_A * np.square(conc_B) \
                    - (self.kill + self.feed) * conc_B
 
             dCdt = 0
@@ -378,56 +360,22 @@ class Simulation(object):
 
 if __name__ == "__main__":
 
-    # Get user input via command-line arguments
-    parser = argparse.ArgumentParser(description='Run a modified Gray-Scott diffusion simulation model.')
-
-    parser.add_argument('--type', type=str, nargs=1,
-                        choices=["2Particles", "2ParticlesZeroOrder",
-                                 "3ParticlesFirstOrder", "3ParticlesSecondOrder",
-                                 "CellularOpen", "CellularRestricted"],
-                        default=["2Particles"],
-                        help='Select a pre-designed simulation type to run')
-    parser.add_argument('--run_name', type=str, default=["test"],
-                        help='Enter a base prefix run name for the saved simulation directory.')
-    parser.add_argument('--iterations', type=int, default=200,
-                        help='Enter the number of iterations for which to run the simulation.')
-
-    parser.add_argument('--feed', type=float, default=0.0362,
-                        help='Feed rate.')
-    parser.add_argument('--kill', type=float, default=0.062,
-                        help='Kill rate.')
-    parser.add_argument('--length', type=int, default=50,
-                        help='Simulation dimension.')
-
-    parser.add_argument('--updates_per_frame', type=int, default=50,
-                        help='Number of updates of simulation to perform for each frame of the animation.')
-    parser.add_argument('--visual', type=bool,
+    # Run a standard Gray-Scott diffusion model (see `run_simulation.py` for more complex params)
+    parser = argparse.ArgumentParser(description='Run a Gray-Scott diffusion simulation model.')
+    parser.add_argument('--feed', type=float, default=0.0362, help='Feed rate.')
+    parser.add_argument('--kill', type=float, default=0.062, help='Kill rate.')
+    parser.add_argument('--length', type=int, default=50, help='Simulation dimension.')
+    parser.add_argument('--visual', dest='visual', action='store_true',
                         help='Whether or not to visualize the simulation real-time.')
-
+    parser.set_defaults(visual=False)
     args = parser.parse_args()
 
-    # Decide what type of simulation the user wants to run
-    # Decide what type of simulation the user wants to run
-    if args.type[0] == "2Particles":
-        sim = Simulation(n=2, orders=[-1,-1], diffusions = [1, 0.5], feed = args.feed, kill = args.kill, length=args.length, init="pointMass")
-    elif args.type[0] == "2ParticlesZeroOrder":
-        sim = Simulation(n=2, orders=[0, 0], diffusions = [1, 0.5], activationEnergies = [3, 3], temp = 298, length=args.length, init="pointMass")
-    elif args.type[0] == "3ParticlesFirstOrder":
-        sim = Simulation(n=3, orders=[1,1,1], diffusions = [1, 1, 0.5], activationEnergies = [4, 4], temp = 350, length=args.length, init="even", startingConcs=[0.5, 0.25, 0])
-    elif args.type[0] == "3ParticlesSecondOrder":
-        sim = Simulation(n=3, orders=[2,2,2], diffusions = [1, 1, 0.5], activationEnergies = [3, 3], temp = 298, length=args.length, init="even", startingConcs=[0.5, 0.25, 0])
-    elif args.type[0] == "CellularOpen":
-        sim = Simulation(n=3, orders=[1,1,1], diffusions = [1, 1, 0.5], activationEnergies = [3, 3], temp = 350, length=args.length, init="cellular-open", startingConcs=[0.5, 1, 0])
-    elif args.type[0] == "CellularRestricted":
-        sim = Simulation(n=3, orders=[1,1,1], diffusions = [1, 1, 0.5], activationEnergies = [3, 3], temp = 350, length=args.length, init="cellular-restricted", startingConcs=[0.5, 1, 0], laplace_matrix=config.RESTRICTED_LAPLACE_MATRIX)
-    else:
-        # argparse should handle this, but just in case
-        sim = None
-        raise Exception("Unrecognized simulation type. %r" % args.type[0])
+    sim = Simulation(n=2, orders=[-1, -1], diffusions=[1, 0.5], feed=args.feed, kill=args.kill, length=args.length,
+                     init="pointMass")
 
-    # Run the selected simulation and save to the results to simulations\[<input name>]-[<params>]
-    sim.run(iterations=args.iterations, run_name=args.run_name, updates_per_frame=args.updates_per_frame,
+    sim.run(iterations=args.iterations, run_name="test", updates_per_frame=25,
             visual=args.visual)
 
+    # Open the video after it is compiled
     video_path = glob.glob(os.path.join(sim.output_path, '*.avi'))[0]
     open_file(video_path)
