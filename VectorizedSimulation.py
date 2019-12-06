@@ -60,9 +60,6 @@ class Simulation(object):
                  laplace_matrix=config.DEFAULT_LAPLACE_MATRIX, init=config.DEFAULT_INIT,
                  normalize_values=True, updates_per_frame=1):
 
-        # print(locals())
-        # return
-
         # Class parameters
         self.numParticles = n
         self.order = order

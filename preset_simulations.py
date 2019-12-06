@@ -33,6 +33,11 @@ circles = {
     'kill' : 0.0545
 }
 
+waves = {
+    'feed' : 0.014,
+    'kill' : 0.045
+}
+
 def get_gray_scott_config(param):
     out = base_gray_scott.copy()
     out["feed"] = param["feed"]
