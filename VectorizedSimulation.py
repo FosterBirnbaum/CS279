@@ -289,7 +289,7 @@ class Simulation(object):
                 self.laplacians[particle, :, :] = ndimage.convolve(curGrid, self.laplace_matrix, mode='wrap')
 
             # Values too close to zero are set to zero
-            # self.particleList[particle].blocks = self.particleList[particle].blocks.round(decimals=200)
+            self.particleList[particle].blocks = self.particleList[particle].blocks.round(decimals=300)
 
 
 

@@ -62,6 +62,7 @@ def main(args):
     # =======================================
     sim_params["feed"] = args.feed if args.feed is not None else sim_params["feed"]
     sim_params["kill"] = args.kill if args.kill is not None else sim_params["kill"]
+    sim_params["length"] = args.length if args.length is not None else sim_params["length"]
     sim_params["updates_per_frame"] = args.updates_per_frame if \
         args.updates_per_frame is not None else sim_params["updates_per_frame"]
 

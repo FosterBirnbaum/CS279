@@ -15,7 +15,7 @@ base_gray_scott = {
     'startingConcs' : [0.25, 0.25, 0],
     'laplace_matrix' : config.DEFAULT_LAPLACE_MATRIX,
     'normalize_values' : True,
-    'updates_per_frame' : 100,
+    'updates_per_frame' : 25,
 }
 
 default = {
@@ -31,11 +31,6 @@ dots = {
 circles = {
     'feed' : 0.03,
     'kill' : 0.0545
-}
-
-waves = {
-    'feed' : 0.014,
-    'kill' : 0.045
 }
 
 def get_gray_scott_config(param):
@@ -86,6 +81,7 @@ cellular_open = {
     'feed': None,
     'kill': None,
     'temp': 350,
+    'length': 50,
     'init': "cellular-open",
     'activationEnergies': [3, 3],
     'startingConcs': [0.5, 1, 0],
@@ -101,6 +97,7 @@ cellular_restricted = {
     'feed': None,
     'kill': None,
     'temp': 350,
+    'length': 50,
     'init': "cellular-open",
     'activationEnergies': [3, 3],
     'startingConcs': [0.5, 1, 0],
