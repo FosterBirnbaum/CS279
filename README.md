@@ -1,8 +1,10 @@
-# CS279
+# CS279 - Reaction-Diffusion Simulation
 
 ## About
 
-A reaction diffusion simulator for CS279 final project.
+A reaction diffusion simulator for a Stanford CS279 final project (Autumn 2019). Our implemented
+`Simulation` class allows user-defined simulations of Gray-Scott reaction-diffusion models as well
+as custom stochastic reaction-diffusion simulations based on reaction kinetics.
  
 
 ## General Project Structure
