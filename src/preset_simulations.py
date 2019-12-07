@@ -1,3 +1,11 @@
+"""
+File: preset_simulations.py
+This file stores some preset simulations that can be run by
+`run_simulation.py`. Each is represented as a dictionary
+with the necessary simulation parameters for Simulation in
+VecSimulation.py
+"""
+
 from src import config
 
 #########################################
@@ -108,4 +116,3 @@ cellular_restricted = {
     'normalize_values': True,
     'updates_per_frame': 1,
 }
-

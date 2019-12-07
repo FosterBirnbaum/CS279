@@ -20,4 +20,3 @@ DEFAULT_LAPLACE_MATRIX = np.array([[0.05, 0.2, 0.05],
 RESTRICTED_LAPLACE_MATRIX = np.array([[0.3, 0.08, 0.04],
                                       [0.08, -1.0, 0.08],
                                       [0.04, 0.08, 0.3]], np.float64)
-

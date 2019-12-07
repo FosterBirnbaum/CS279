@@ -1,12 +1,10 @@
 """
 This file defines the particle and simulation classes that allow users
-to run a variety of simulation types. The available types are as follows:
-    -TwoParticleGS: Simulates normal Gray-Scott (2B + A --> 3B, feed rate for A, kill rate for B)
-    -ThreeParticleFirstOrder: Simulates a reaction involving 3 particles (A + B --> C) that is first order in A and B
-    -ThreeParticleSecondOrder: Simulates a reaction involving 3 particles (A + B --> C) that is second order in A and first order in B
-    -ThreeParticleFirstOrderWithCatalyst: Simulates a reaction involving 3 particles (A + B --> C) that is first order in substrates and occurs in presence of catalyst
-    -Custom: Allows user to define input parameters
-All simulations are saved in video format, as are plots of relative concentrations of all species involved and a plot of the rate of formation of product (if one is involved).
+to run a variety of simulation types.
+
+All simulations are saved in video format, as are plots of relative
+concentrations of all species involved and a plot of the rate of formation
+of product (if one is involved).
 
 Written by Collin Schlager (schlager@stanford.edu) and Foster Birnbaum (fosb@stanford.edu) -- 12/6/2019
 The backbone of the particle class was written by instructors of CS279 in Fall 2019
@@ -31,7 +29,7 @@ np.set_printoptions(precision=2)
 
 """
 Defines the particle class that contains information on a specific particle in the simulation.
-Each particle is defined as an nX by nY grid, with values in each grid box representing the 
+Each particle is defined as an nX by nY grid, with values in each grid box representing the
 concentration of that particle at that position.
 """
 class Particle(object):
